@@ -320,6 +320,7 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
+  EM_AltairX = 999,       // AltairX
 };
 
 // Object file classes.
@@ -686,6 +687,11 @@ enum {
   // Symbol may follow different calling convention than the standard calling
   // convention.
   STO_RISCV_VARIANT_CC = 0x80
+};
+
+// ELF Relocation types for AltairX
+enum {
+#include "ELFRelocs/AltairX.def"
 };
 
 // ELF Relocation types for S390/zSeries
