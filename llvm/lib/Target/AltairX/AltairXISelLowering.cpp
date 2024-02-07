@@ -81,6 +81,10 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
   case AltairXISD::RET:
     return "AltairXISD::RET";
+  case AltairXISD::CALL:
+    return "AltairXISD::CALL";
+  case AltairXISD::JUMP:
+    return "AltairXISD::JUMP";
   case AltairXISD::BRCOND:
     return "AltairXISD::BRCOND";
   case AltairXISD::SCMP:
@@ -244,60 +248,185 @@ SDValue AltairXTargetLowering::LowerMemOpCallTo(SDValue Chain, SDValue Arg,
 
 /// LowerCallResult - Lower the result values of a call into the
 /// appropriate copies out of appropriate physical registers.
-SDValue AltairXTargetLowering::LowerCallResult(
-    SDValue Chain, SDValue InFlag, CallingConv::ID CallConv, bool isVarArg,
-    const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &dl,
-    SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals, bool isThisReturn,
-    SDValue ThisVal) const {
-  // Assign locations to each value returned by this call.
-  SmallVector<CCValAssign, 16> RVLocs;
-  CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), RVLocs,
-                 *DAG.getContext());
-  CCInfo.AnalyzeCallResult(Ins, AltairX_CRetConv);
+namespace {
 
-  // Copy all of the result registers out of their specified physreg.
-  for (unsigned i = 0; i != RVLocs.size(); ++i) {
-    CCValAssign VA = RVLocs[i];
-
-    // Pass 'this' value directly from the argument to return value, to avoid
-    // reg unit interference
-    if (i == 0 && isThisReturn) {
-      assert(!VA.needsCustom() && VA.getLocVT() == MVT::i32 &&
-             "unexpected return calling convention register assignment");
-      InVals.push_back(ThisVal);
-      continue;
-    }
-
-    SDValue Val;
-    if (VA.needsCustom()) {
-      llvm_unreachable("Vector and floating point values not supported yet");
+SDValue LowerCallResult(SDValue Chain, SDValue Glue,
+                        const SmallVectorImpl<CCValAssign> &RetLocs, SDLoc DL,
+                        SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) {
+  // Copy results out of physical registers.
+  SmallVector<std::pair<std::int64_t, std::size_t>> retMemLocs;
+  for (const CCValAssign &VA : RetLocs) {
+    if (VA.isRegLoc()) {
+      SDValue ret =
+          DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getValVT(), Glue);
+      Chain = ret.getValue(1);
+      Glue = ret.getValue(2);
+      InVals.push_back(ret);
     } else {
-      Val =
-          DAG.getCopyFromReg(Chain, dl, VA.getLocReg(), VA.getLocVT(), InFlag);
-      Chain = Val.getValue(1);
-      InFlag = Val.getValue(2);
-    }
+      assert(VA.isMemLoc() && "Must be memory location.");
+      retMemLocs.emplace_back(VA.getLocMemOffset(), InVals.size());
 
-    switch (VA.getLocInfo()) {
-    default:
-      llvm_unreachable("Unknown loc info!");
-    case CCValAssign::Full:
-      break;
-    case CCValAssign::BCvt:
-      Val = DAG.getNode(ISD::BITCAST, dl, VA.getValVT(), Val);
-      break;
+      // Reserve space for this result.
+      InVals.push_back(SDValue());
     }
+  }
 
-    InVals.push_back(Val);
+  // Copy results out of memory.
+  SmallVector<SDValue, 4> memOpChains;
+  for (auto [offset, index] : retMemLocs) {
+    SDValue sp = DAG.getRegister(AltairX::R0, MVT::i64);
+    SDValue offVal = DAG.getConstant(offset, DL, MVT::i64);
+    SDValue loc = DAG.getNode(ISD::ADD, DL, MVT::i64, sp, offVal);
+    SDValue load = DAG.getLoad(MVT::i64, DL, Chain, loc, MachinePointerInfo());
+
+    InVals[index] = load;
+    memOpChains.push_back(load.getValue(1));
+  }
+
+  // Transform all loads nodes into one single node because
+  // all load nodes are independent of each other.
+  if (!memOpChains.empty()) {
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, memOpChains);
   }
 
   return Chain;
 }
 
+}
+
 SDValue
 AltairXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                  SmallVectorImpl<SDValue> &InVals) const {
-  llvm_unreachable("Cannot lower call");
+  CLI.IsTailCall = false; // Do not support tail calls yet.
+
+  auto &DAG = CLI.DAG;
+  auto &DL = CLI.DL;
+
+  SmallVector<CCValAssign, 16> argLocs;
+  CCState inInfo{CLI.CallConv, CLI.IsVarArg, DAG.getMachineFunction(), argLocs,
+                 *DAG.getContext()};
+  inInfo.AnalyzeCallOperands(CLI.Outs, AltairX_CCallingConv);
+
+  // Analyze return values to determine the number of bytes of stack required.
+  SmallVector<CCValAssign, 16> retLocs;
+  CCState retInfo{CLI.CallConv, CLI.IsVarArg, DAG.getMachineFunction(), retLocs,
+                  *DAG.getContext()};
+  retInfo.AllocateStack(inInfo.getStackSize(), Align(8));
+  retInfo.AnalyzeCallResult(CLI.Ins, AltairX_CRetConv);
+  const auto stackSize = retInfo.getStackSize();
+
+  CLI.Chain = DAG.getCALLSEQ_START(CLI.Chain, stackSize, 0, DL);
+
+  SmallVector<std::pair<Register, SDValue>, 8> regsToPass;
+  SmallVector<SDValue, 12> memOpChains;
+
+  SDValue stackPtr;
+  // Walk the register/memloc assignments, inserting copies/loads.
+  for (std::size_t i{}; i < argLocs.size(); ++i) {
+    CCValAssign &VA = argLocs[i];
+    SDValue arg = CLI.OutVals[i];
+
+    // Promote the value if needed.
+    switch (VA.getLocInfo()) {
+    default:
+      llvm_unreachable("Unknown loc info!");
+    case CCValAssign::Full:
+      break;
+    case CCValAssign::SExt:
+      arg = DAG.getNode(ISD::SIGN_EXTEND, DL, VA.getLocVT(), arg);
+      break;
+    case CCValAssign::AExt:
+      [[fallthrough]];
+    case CCValAssign::ZExt:
+      arg = DAG.getNode(ISD::ZERO_EXTEND, DL, VA.getLocVT(), arg);
+      break;
+    }
+
+    // Arguments that can be passed on register must be kept at
+    // RegsToPass vector
+    if (VA.isRegLoc()) {
+      regsToPass.emplace_back(VA.getLocReg(), arg);
+    } else {
+      assert(VA.isMemLoc() && "Must be register or memory argument.");
+      if (!stackPtr.getNode()) {
+        stackPtr = DAG.getCopyFromReg(CLI.Chain, DL, AltairX::R0, MVT::i64);
+      }
+      // Calculate the stack position.
+      SDValue offset = DAG.getIntPtrConstant(VA.getLocMemOffset(), DL);
+      SDValue ptrOff = DAG.getNode(ISD::ADD, DL, MVT::i64, stackPtr, offset);
+      SDValue store =
+          DAG.getStore(CLI.Chain, DL, arg, ptrOff, MachinePointerInfo{});
+
+      memOpChains.push_back(store);
+      CLI.IsTailCall = false;
+    }
+  }
+
+  // Transform all store nodes into one single node because
+  // all store nodes are independent of each other.
+  if (!memOpChains.empty()) {
+    CLI.Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, memOpChains);
+  }
+
+  // Build a sequence of copy-to-reg nodes chained together with token
+  // chain and flag operands which copy the outgoing args into registers.
+  // The Glue in necessary since all emitted instructions must be
+  // stuck together.
+  SDValue glue{};
+  for (auto [reg, val] : regsToPass) {
+    CLI.Chain = DAG.getCopyToReg(CLI.Chain, DL, reg, val, glue);
+    glue = CLI.Chain.getValue(1);
+  }
+
+  // If the callee is a GlobalAddress node (quite common, every direct call is)
+  // turn it into a TargetGlobalAddress node so that legalize doesn't hack it.
+  // Likewise ExternalSymbol -> TargetExternalSymbol.
+  bool isDirect = true;
+  if (auto *global = dyn_cast<GlobalAddressSDNode>(CLI.Callee); global) {
+    CLI.Callee = DAG.getTargetGlobalAddress(global->getGlobal(), DL, MVT::i64);
+  } else if (auto *ext = dyn_cast<ExternalSymbolSDNode>(CLI.Callee); ext) {
+    CLI.Callee = DAG.getTargetExternalSymbol(ext->getSymbol(), MVT::i64);
+  } else {
+    isDirect = false;
+  }
+
+  // Branch + Link = #chain, #target_address, #opt_in_flags...
+  //             = Chain, Callee, Reg#1, Reg#2, ...
+  // Returns a chain & a glue for retval copy to use.
+  SmallVector<SDValue, 8> ops;
+  ops.push_back(CLI.Chain);
+  ops.push_back(CLI.Callee);
+  for (auto &&[loc, arg] : regsToPass) {
+    ops.push_back(DAG.getRegister(loc, arg.getValueType()));
+  }
+
+  SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
+  // Add a register mask operand representing the call-preserved registers.
+  const auto *TRI = Subtarget.getRegisterInfo();
+  const uint32_t *mask =
+      TRI->getCallPreservedMask(DAG.getMachineFunction(), CLI.CallConv);
+  assert(mask && "Missing call preserved mask for calling convention");
+  ops.push_back(DAG.getRegisterMask(mask));
+
+  if (glue.getNode()) {
+    ops.push_back(glue);
+  }
+
+  CLI.Chain = DAG.getNode(isDirect ? AltairXISD::CALL : AltairXISD::JUMP, DL,
+                          NodeTys, ops);
+  glue = CLI.Chain.getValue(1);
+
+  // Create the CALLSEQ_END node.
+  CLI.Chain = DAG.getCALLSEQ_END(CLI.Chain, stackSize, 0, glue, DL);
+  glue = CLI.Chain.getValue(1);
+
+  // Handle result values, copying them out of physregs into vregs that we
+  // return.
+  if (CLI.IsTailCall) {
+    return CLI.Chain;
+  }
+
+  return LowerCallResult(CLI.Chain, glue, retLocs, DL, DAG, InVals);
 }
 
 /// HandleByVal - Every parameter *after* a byval parameter is passed
