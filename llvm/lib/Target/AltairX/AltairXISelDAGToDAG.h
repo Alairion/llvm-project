@@ -33,6 +33,7 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   bool doesImplicitTruncate(unsigned Opcode) const noexcept;
+  bool outputsInMDUReg(unsigned Opcode) const noexcept;
   bool selectAddr(SDValue N, SDValue &Base, SDValue &Offset, SDValue &Shift) const;
   bool selectAddrImm(SDValue N, SDValue& Base, SDValue& Offset) const;
   bool selectAddrImmSP(SDValue N, SDValue& Base, SDValue& Offset) const;
