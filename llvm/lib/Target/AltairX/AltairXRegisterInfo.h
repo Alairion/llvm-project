@@ -46,6 +46,9 @@ public:
                            unsigned FIOperandNum,
                            RegScavenger *RS = nullptr) const override;
 
+  // Special regs
+  Register getStackRegister() const;
+  Register getZeroRegister() const;
   Register getFrameRegister(const MachineFunction &MF) const override;
 
   static const TargetRegisterClass *intRegClass(unsigned Size);

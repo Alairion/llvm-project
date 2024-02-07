@@ -27,12 +27,32 @@ namespace llvm {
 class AltairXInstrInfo : public AltairXGenInstrInfo {
 public:
   explicit AltairXInstrInfo(const AltairXSubtarget &STI);
-  
+
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
                    const DebugLoc &DL, MCRegister DestReg, MCRegister SrcReg,
                    bool KillSrc) const override;
 
   bool expandPostRAPseudo(MachineInstr& MI) const override;
+  /*
+  MachineInstr* foldMemoryOperandImpl(
+    MachineFunction& MF, MachineInstr& MI, ArrayRef<unsigned> Ops,
+    MachineBasicBlock::iterator InsertPt, int FrameIndex,
+    LiveIntervals* LIS, VirtRegMap* VRM) const override;
+  */
+  void storeRegToStackSlot(MachineBasicBlock &MBB,
+                           MachineBasicBlock::iterator MI, Register SrcReg,
+                           bool isKill, int FrameIndex,
+                           const TargetRegisterClass *RC,
+                           const TargetRegisterInfo *TRI,
+                           Register VReg) const override;
+
+  void loadRegFromStackSlot(MachineBasicBlock &MBB,
+                            MachineBasicBlock::iterator MI, Register DestReg,
+                            int FrameIndex, const TargetRegisterClass *RC,
+                            const TargetRegisterInfo *TRI,
+                            Register VReg) const override;
+
+
 
   MachineBasicBlock* getBranchDestBlock(const MachineInstr& MI) const override;
 

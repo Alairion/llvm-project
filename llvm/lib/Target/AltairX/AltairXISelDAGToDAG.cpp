@@ -32,6 +32,13 @@ bool AltairXDAGToDAGISel::doesImplicitTruncate(unsigned Opcode) const noexcept {
          Opcode != ISD::FREEZE;
 }
 
+bool AltairXDAGToDAGISel::outputsInMDUReg(unsigned Opcode) const noexcept {
+  return Opcode == ISD::MUL || Opcode == ISD::SDIV || Opcode == ISD::UDIV ||
+         Opcode == ISD::SREM || Opcode == ISD::UREM ||
+         Opcode == ISD::SMUL_LOHI || Opcode == ISD::UMUL_LOHI ||
+         Opcode == ISD::SDIVREM || Opcode == ISD::UDIVREM;
+}
+
 namespace
 {
 
@@ -112,7 +119,7 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
   auto right = N.getOperand(1);
 
   if(auto* value = dyn_cast<ConstantSDNode>(right); value) {
-    if(isInt<10>(value->getSExtValue())) {
+    if(isInt<32>(value->getSExtValue())) {
       Base = left;
       Offset = right;
       return true;
@@ -159,13 +166,10 @@ void AltairXDAGToDAGISel::Select(SDNode *Node) {
 
   // Instruction Selection not handled by the auto-generated tablegen selection
   // should be handled here.
-  switch (Node->getOpcode()) {
-  case AltairXISD::RET:
-    Node->setNodeId(-1);
-    break;
-  default:
-    break;
-  }
+  //switch (Node->getOpcode()) {
+  //default:
+  //  break;
+  //}
 
   // Select the default instruction
   SelectCode(Node);
