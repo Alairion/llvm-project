@@ -25,6 +25,9 @@ class AltairXOpcode {
   bits<8> Value;
 }
 
+let Value = 0 in
+def OPCODE_TO_DETERMINE : AltairXOpcode;
+
 class AltairXOpcodeALU0<bits<4> val>
   : AltairXOpcode {
   let Value{7-5} = 0b000;
@@ -143,6 +146,9 @@ class AltairXOpcodeEFU<bits<4> val>
   let Value{0} = 0;
 }
 
+def OPCODE_MOVEIR : AltairXOpcodeEFU<0b0000>; // R <- LR/BR
+def OPCODE_MOVERI : AltairXOpcodeEFU<0b1000>; // LR/BR <- R
+
 //===----------------------------------------------------------------------===//
 // Instruction formats
 //===----------------------------------------------------------------------===//
@@ -177,6 +183,7 @@ class AltairXPseudo<dag outs, dag ins, list<dag> pattern, string opcodestr = "",
   let isCodeGenOnly = 1;
 }
 
+// ALU
 class AltairXInstALURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rd;
@@ -191,13 +198,15 @@ class AltairXInstALURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Opcode = opcode.Value;
 }
 
-class AltairXInstALUR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+class AltairXInstSExt<AltairXOpcode opcode, bits<2> size, bits<2> insize, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rd;
   bits<6> rs1;
 
   let Inst{31-26} = rd;
   let Inst{25-20} = rs1;
+  let Inst{19-14} = 0b111111;
+  let Inst{13-12} = insize;
   let Inst{10} = 0;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
@@ -215,6 +224,33 @@ class AltairXInstALURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Inst{10} = 1;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
+}
+
+class AltairXInstCMPRR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rs1;
+  bits<6> rs2;
+
+  let Inst{25-20} = rs1;
+  let Inst{19-14} = rs2;
+  let Inst{9-8} = size;
+  let Opcode = opcode.Value;
+  
+  let isCompare = 1;
+}
+
+class AltairXInstCMPRI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rs1;
+  bits<9> imm;
+
+  let Inst{25-20} = rs1;
+  let Inst{19-11} = imm;
+  let Inst{10} = 0;
+  let Inst{9-8} = size;
+  let Opcode = opcode.Value;
+  
+  let isCompare = 1;
 }
 
 class AltairXInstMove<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
@@ -242,6 +278,45 @@ class AltairXInstMoveShift<AltairXOpcode opcode, bits<2> shift, dag outs, dag in
   let isMoveImm = true;
 }
 
+// MDU
+class AltairXInstMDURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rs1;
+  bits<6> rs2;
+
+  let Inst{31-26} = 0; // MDU outputs in special registers
+  let Inst{25-20} = rs1;
+  let Inst{19-14} = rs2;
+  let Inst{10} = 0;
+  let Inst{9-8} = size;
+  let Opcode = opcode.Value;
+}
+
+class AltairXInstMDURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegImm> {
+  bits<6> rs1;
+  bits<9> imm;
+
+  let Inst{31-26} = 0; // MDU outputs in special registers
+  let Inst{25-20} = rs1;
+  let Inst{19-11} = imm;
+  let Inst{10} = 1;
+  let Inst{9-8} = size;
+  let Opcode = opcode.Value;
+}
+
+class AltairXInstMDUMove<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rd;
+  bits<6> rs1;
+
+  let Inst{31-26} = rd;
+  let Inst{25-20} = rs1;
+  let Inst{10} = 0;
+  let Opcode = opcode.Value;
+}
+
+// LSU
 class AltairXInstLSURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> reg;
@@ -282,20 +357,7 @@ class AltairXInstLSUSP<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Opcode = opcode.Value;
 }
 
-class AltairXInstCMP<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
-  bits<6> rs1;
-  bits<6> rs2;
-
-  let Inst{25-20} = rs1;
-  let Inst{19-14} = rs2;
-  let Inst{9-8} = size;
-  let Opcode = opcode.Value;
-  
-  let isCompare = 1;
-  let Defs = [CmpFlag];
-}
-
+// BRU
 class AltairXInstBR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegImm> {
   bits<24> target;
@@ -310,8 +372,33 @@ class AltairXInstBR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, 
 
 class AltairXCallInst<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegImm> {
-  bits<24> imm;
+  bits<24> addr;
 
-  let Inst{31-8} = imm;
+  let Inst{31-8} = addr;
   let Opcode = opcode.Value;
+}
+
+// CU
+class AltairXInstCUMoveIR<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegImm> {
+  bits<6> rs1;
+  bits<6> ri;
+
+  let Inst{31-26} = 0b111111;
+  let Inst{25-20} = rs1;
+  let Inst{19-14} = 0b111111;
+  let Inst{11-13} = ri{0-2};
+  let Opcode = OPCODE_MOVEIR.Value;
+}
+
+class AltairXInstCUMoveRI<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegImm> {
+  bits<6> rd;
+  bits<6> ri;
+
+  let Inst{31-26} = rd;
+  let Inst{25-20} = 0b111111;
+  let Inst{19-14} = 0b111111;
+  let Inst{11-13} = ri{0-2};
+  let Opcode = OPCODE_MOVERI.Value;
 }

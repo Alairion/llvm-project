@@ -26,7 +26,9 @@ enum NodeType {
   // Start the numbering from where ISD NodeType finishes.
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
 
-  RET, // AltairXRet
+  RET, // AltairXRET
+  CALL, // AltairXCALL
+  JUMP, // AltairXJUMP
   BRCOND, // AltairXBRCOND
   SCMP, // AltairXSCMP
   CMOVE, // AltairXCMOVE
@@ -84,12 +86,6 @@ private:
 
   void HandleByVal(CCState *State, unsigned int &Size, Align Align) const override;
 
-  SDValue LowerCallResult(SDValue Chain, SDValue InFlag,
-                          CallingConv::ID CallConv, bool IsVarArg,
-                          const SmallVectorImpl<ISD::InputArg> &Ins,
-                          const SDLoc &dl, SelectionDAG &DAG,
-                          SmallVectorImpl<SDValue> &InVals, bool isThisReturn,
-                          SDValue ThisVal) const;
   SDValue LowerMemOpCallTo(SDValue Chain, SDValue Arg, const SDLoc &dl,
                            SelectionDAG &DAG, const CCValAssign &VA,
                            ISD::ArgFlagsTy Flags) const;

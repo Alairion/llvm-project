@@ -26,7 +26,7 @@ public:
   std::pair<const char *, uint64_t> getMnemonic(const MCInst *MI) override;
   //void printInst(const MCInst *MI, uint64_t Address, unsigned OpIdx,
   //                      unsigned PrintMethodIdx, raw_ostream &OS);
-  static const char *getRegisterName(MCRegister Reg);
+  static const char *getRegisterName(MCRegister Reg, unsigned AltIdx);
 
   void printRegName(raw_ostream &OS, MCRegister Reg) const override;
   void printInst(const MCInst *MI, uint64_t Address, StringRef Annot,

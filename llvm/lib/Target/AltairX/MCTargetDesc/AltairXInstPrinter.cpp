@@ -33,21 +33,42 @@ AltairXInstPrinter::AltairXInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &
     : MCInstPrinter(MAI, MII, MRI) {}
 
 void AltairXInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
-  OS << StringRef(getRegisterName(Reg)).lower();
+  if(Reg >= AltairX::R0) // TODO: do this correctly :)
+  {
+    OS << getRegisterName(Reg, AltairX::AltairXRegAltNameIndex);
+  }
+  else
+  {
+    OS << getRegisterName(Reg, AltairX::NoRegAltName);
+  }
 }
 
 void AltairXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                  StringRef Annot, const MCSubtargetInfo &STI,
                                  raw_ostream &O) {
+
+  // Replace "add a, b, 0" with "move a, b"
+  if ((MI->getOpcode() == AltairX::AddRIb ||
+       MI->getOpcode() == AltairX::AddRIw ||
+       MI->getOpcode() == AltairX::AddRId ||
+       MI->getOpcode() == AltairX::AddRIq) &&
+      MI->getOperand(2).getImm() == 0) {
+    O << '\t' << "move ";
+    printOperand(MI, 0, O);
+    O << ", ";
+    printOperand(MI, 1, O);
+  }
   // Try to print any aliases first.
-  if (!printAliasInstr(MI, Address, O)) {
+  else if (!printAliasInstr(MI, Address, O)) {
     printInstruction(MI, Address, O);
   }
+
   printAnnotation(O, Annot);
 }
 
 void AltairXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
   const MCOperand &Op = MI->getOperand(OpNo);
+
   if (Op.isReg()) {
     printRegName(O, Op.getReg());
     return;
