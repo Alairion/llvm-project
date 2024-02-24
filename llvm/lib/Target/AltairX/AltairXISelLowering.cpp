@@ -60,9 +60,9 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
   // setBooleanVectorContents(ZeroOrOneBooleanContent);
 
-  setOperationAction(ISD::GlobalAddress, MVT::i32, LegalizeAction::Custom);
-  setOperationAction(ISD::BlockAddress, MVT::i32, LegalizeAction::Custom);
-  setOperationAction(ISD::ConstantPool, MVT::i32, LegalizeAction::Custom);
+  setOperationAction(ISD::GlobalAddress, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::BlockAddress, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::ConstantPool, MVT::i64, LegalizeAction::Custom);
 
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
   // Decompose BR_CC in SETCC + BRCOND to later generate a cmp + bx
@@ -91,6 +91,8 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AltairXISD::SCMP";
   case AltairXISD::CMOVE:
     return "AltairXISD::CMOVE";
+  case AltairXISD::GAWRAPPER:
+    return "AltairXISD::GAWRAPPER";
   default:
     return nullptr;
   }
@@ -539,22 +541,24 @@ AltairXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   return DAG.getNode(AltairXISD::RET, DL, MVT::Other, retOps);
 }
 
-//===----------------------------------------------------------------------===//
-//  Lower helper functions
-//===----------------------------------------------------------------------===//
-
 SDValue AltairXTargetLowering::getGlobalAddressWrapper(
     SDValue GA, const GlobalValue *GV, SelectionDAG &DAG) const {
   llvm_unreachable("Unhandled global variable");
 }
 
-//===----------------------------------------------------------------------===//
-//  Misc Lower Operation implementation
-//===----------------------------------------------------------------------===//
-
 SDValue AltairXTargetLowering::LowerGlobalAddress(SDValue Op,
                                                   SelectionDAG &DAG) const {
-  llvm_unreachable("Unsupported global address");
+  const GlobalAddressSDNode* node = cast<GlobalAddressSDNode>(Op);
+  const GlobalValue* value = node->getGlobal();
+  const auto type = Op.getValueType();
+
+  SDLoc DL{node};
+  SDValue addr = DAG.getTargetGlobalAddress(value, DL, type, node->getOffset());
+  SDValue wrap = DAG.getNode(AltairXISD::GAWRAPPER, DL, type, addr);
+
+  return wrap;
+  //return DAG.getLoad(type, DL, DAG.getEntryNode(), wrap,
+  //                   MachinePointerInfo::getGOT(DAG.getMachineFunction()));
 }
 
 SDValue AltairXTargetLowering::LowerConstantPool(SDValue Op,
