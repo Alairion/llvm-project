@@ -33,6 +33,7 @@ enum NodeType {
   SCMP, // AltairXSCMP
   CMOVE, // AltairXCMOVE
   CMOVETMP, // AltairXCMOVE
+  GAWRAPPER, // AltairXGAWRAPPER
 };
 }
 

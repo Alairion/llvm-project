@@ -61,6 +61,17 @@ def addr : ComplexPattern<iPTR, 3, "selectAddr", [], []>;
 def addrimm : ComplexPattern<iPTR, 2, "selectAddrImm", [], []>;
 def addrimmsp : ComplexPattern<iPTR, 2, "selectAddrImmSP", [], []>;
 
+// Global address
+def SDT_AltairXGAWRAPPER : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
+def AltairXGAWRAPPER : SDNode<"AltairXISD::GAWRAPPER", SDT_AltairXGAWRAPPER, []>;
+
+def AltairXGlobalAddrValue : AltairXPseudo<
+  (outs GPIReg64:$ptr), 
+  (ins i64imm:$addr),
+  [(set GPIReg64:$ptr, (AltairXGAWRAPPER tglobaladdr:$addr))],
+  "move $ptr, $addr"
+>;
+
 //===----------------------------------------------------------------------===//
 // Procedure calling
 //===----------------------------------------------------------------------===//
@@ -425,6 +436,14 @@ def zextloadi16_i32 : PatFrag<(ops node:$ptr), (i32 (zextloadi16 node:$ptr))>;
 def zextloadi16_i64 : PatFrag<(ops node:$ptr), (i64 (zextloadi16 node:$ptr))>;
 def zextloadi32_i64 : PatFrag<(ops node:$ptr), (i64 (zextloadi32 node:$ptr))>;
 
+// "Typed" extload
+def extloadi8_i16 : PatFrag<(ops node:$ptr), (i16 (extloadi8 node:$ptr))>;
+def extloadi8_i32 : PatFrag<(ops node:$ptr), (i32 (extloadi8 node:$ptr))>;
+def extloadi8_i64 : PatFrag<(ops node:$ptr), (i64 (extloadi8 node:$ptr))>;
+def extloadi16_i32 : PatFrag<(ops node:$ptr), (i32 (extloadi16 node:$ptr))>;
+def extloadi16_i64 : PatFrag<(ops node:$ptr), (i64 (extloadi16 node:$ptr))>;
+def extloadi32_i64 : PatFrag<(ops node:$ptr), (i64 (extloadi32 node:$ptr))>;
+
 // "Typed" sextload
 def sextloadi8_i16 : PatFrag<(ops node:$ptr), (i16 (sextloadi8 node:$ptr))>;
 def sextloadi8_i32 : PatFrag<(ops node:$ptr), (i32 (sextloadi8 node:$ptr))>;
@@ -457,6 +476,14 @@ def LoadRRwZX32 : LoadRRInst<GPIReg32, zextloadi16_i32, 1, "w">;
 def LoadRRwZX64 : LoadRRInst<GPIReg64, zextloadi16_i64, 1, "w">;
 def LoadRRdZX64 : LoadRRInst<GPIReg64, zextloadi32_i64, 2, "d">;
 
+// extload: use instruction to ensure no additional operations are generated 
+def LoadRRbAX16 : LoadRRInst<GPIReg16, extloadi8_i16, 0, "b">;
+def LoadRRbAX32 : LoadRRInst<GPIReg32, extloadi8_i32, 0, "b">;
+def LoadRRbAX64 : LoadRRInst<GPIReg64, extloadi8_i64, 0, "b">;
+def LoadRRwAX32 : LoadRRInst<GPIReg32, extloadi16_i32, 1, "w">;
+def LoadRRwAX64 : LoadRRInst<GPIReg64, extloadi16_i64, 1, "w">;
+def LoadRRdAX64 : LoadRRInst<GPIReg64, extloadi32_i64, 2, "d">;
+
 // Load Reg + Imm
 let canFoldAsLoad = 1, isReMaterializable = 1, hasSideEffects = 0, mayLoad = 1 in
 class LoadRIInst<RegisterClass regclass, SDPatternOperator opnode, bits<2> size, string sizename> 
@@ -481,6 +508,14 @@ def LoadRIwZX32 : LoadRIInst<GPIReg32, zextloadi16_i32, 1, "w">;
 def LoadRIwZX64 : LoadRIInst<GPIReg64, zextloadi16_i64, 1, "w">;
 def LoadRIdZX64 : LoadRIInst<GPIReg64, zextloadi32_i64, 2, "d">;
 
+// zextload: use instruction to ensure no additional operations are generated  (imm version)
+def LoadRIbAX16 : LoadRIInst<GPIReg16, extloadi8_i16, 0, "b">;
+def LoadRIbAX32 : LoadRIInst<GPIReg32, extloadi8_i32, 0, "b">;
+def LoadRIbAX64 : LoadRIInst<GPIReg64, extloadi8_i64, 0, "b">;
+def LoadRIwAX32 : LoadRIInst<GPIReg32, extloadi16_i32, 1, "w">;
+def LoadRIwAX64 : LoadRIInst<GPIReg64, extloadi16_i64, 1, "w">;
+def LoadRIdAX64 : LoadRIInst<GPIReg64, extloadi32_i64, 2, "d">;
+
 // Load SP + Imm
 let canFoldAsLoad = 1, isReMaterializable = 1, hasSideEffects = 0, mayLoad = 1 in
 class LoadSPInst<RegisterClass regclass, SDPatternOperator opnode, bits<2> size, string sizename> 
@@ -504,6 +539,14 @@ def LoadSPbZX64 : LoadSPInst<GPIReg64, zextloadi8_i64, 0, "b">;
 def LoadSPwZX32 : LoadSPInst<GPIReg32, zextloadi16_i32, 1, "w">;
 def LoadSPwZX64 : LoadSPInst<GPIReg64, zextloadi16_i64, 1, "w">;
 def LoadSPdZX64 : LoadSPInst<GPIReg64, zextloadi32_i64, 2, "d">;
+
+// zextload: use instruction to ensure no additional operations are generated  (SP version)
+def LoadSPbAX16 : LoadSPInst<GPIReg16, extloadi8_i16, 0, "b">;
+def LoadSPbAX32 : LoadSPInst<GPIReg32, extloadi8_i32, 0, "b">;
+def LoadSPbAX64 : LoadSPInst<GPIReg64, extloadi8_i64, 0, "b">;
+def LoadSPwAX32 : LoadSPInst<GPIReg32, extloadi16_i32, 1, "w">;
+def LoadSPwAX64 : LoadSPInst<GPIReg64, extloadi16_i64, 1, "w">;
+def LoadSPdAX64 : LoadSPInst<GPIReg64, extloadi32_i64, 2, "d">;
 
 // sextload: actually perform a sext
 multiclass SExtLoadPat<PatFrag loadpat, SExt sextinst, LoadRRInst loadrrinst, LoadRIInst loadriinst, LoadSPInst loadspinst> {

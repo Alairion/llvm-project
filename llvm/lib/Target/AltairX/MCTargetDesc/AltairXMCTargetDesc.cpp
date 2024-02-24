@@ -13,6 +13,7 @@
 #include "AltairXMCTargetDesc.h"
 #include "AltairXInstPrinter.h"
 #include "AltairXMCAsmInfo.h"
+#include "AltairXMCCodeEmitter.h"
 #include "TargetInfo/AltairXTargetInfo.h"
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCInstrAnalysis.h"
@@ -73,6 +74,11 @@ static MCAsmInfo *createAltairXMCAsmInfo(const MCRegisterInfo &MRI,
   return MAI;
 }
 
+static MCCodeEmitter *createAltairXMCCodeEmitter(const MCInstrInfo &II,
+                                                 MCContext &Ctx) {
+  return new AltairXMCCodeEmitter{II, Ctx};
+}
+
 extern "C" void LLVMInitializeAltairXTargetMC() {
   for (Target *T : {&getTheAltairXTarget()}) {
     // Register the MC asm info.
@@ -89,5 +95,8 @@ extern "C" void LLVMInitializeAltairXTargetMC() {
 
     // Register the MCInstPrinter.
     TargetRegistry::RegisterMCInstPrinter(*T, createAltairXMCInstPrinter);
+
+    // Register the MCCodeEmitter
+    TargetRegistry::RegisterMCCodeEmitter(*T, createAltairXMCCodeEmitter);
   }
 }

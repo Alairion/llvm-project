@@ -60,13 +60,7 @@ std::optional<std::uint64_t> selectAddrRRShift(SDValue N) {
 
 bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
                                      SDValue &Offset, SDValue &Shift) const {
-  //if (N.getOpcode() == ISD::FrameIndex ||
-  //  N.getOpcode() == ISD::TargetExternalSymbol ||
-  //  N.getOpcode() == ISD::TargetGlobalAddress ||
-  //  N.getOpcode() == ISD::TargetGlobalTLSAddress) {
-  //  return false; // direct calls.
-  //}
-  
+
   // Check if this particular node is reused in any non-memory related
   // operation.  If yes, do not try to fold this node into the address
   // computation, since the computation will be kept.
@@ -77,6 +71,14 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
   //}
 
   SDLoc DL{N};
+
+  if(N.getOpcode() == AltairXISD::GAWRAPPER) {
+    Base = N.getOperand(0);
+    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    Shift = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    return true;
+  }
+
   SDValue left = N.getOperand(0);
   SDValue right = N.getOperand(1);
 
@@ -109,9 +111,11 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
 bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
                                         SDValue &Offset) const {
   // Load at given address directly
+  SDLoc DL{N};
+
   if (N.getOpcode() != ISD::ADD) {
     Base = N;
-    Offset = CurDAG->getTargetConstant(0, SDLoc{N}, MVT::i64);
+    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
     return true;
   }
 
@@ -119,9 +123,10 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
   auto right = N.getOperand(1);
 
   if(auto* value = dyn_cast<ConstantSDNode>(right); value) {
-    if(isInt<32>(value->getSExtValue())) {
+    const auto constval = value->getSExtValue();
+    if(isInt<32>(constval)) {
       Base = left;
-      Offset = right;
+      Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
       return true;
     }
   }
@@ -135,19 +140,22 @@ bool AltairXDAGToDAGISel::selectAddrImmSP(SDValue N, SDValue &Base,
     return false;
   }
 
+  SDLoc DL{N};
+
   // Load at given address directly
   if(N.getOpcode() != ISD::ADD) {
     Base = N;
-    Offset = CurDAG->getTargetConstant(0, SDLoc{N}, MVT::i64);
+    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
     return true;
   }
 
   auto left = N.getOperand(0);
   auto right = N.getOperand(1);
   if(auto* value = dyn_cast<ConstantSDNode>(right); value) {
-    if(isUInt<16>(value->getZExtValue())) {
+    const auto constval = value->getSExtValue();
+    if(isUInt<16>(constval)) {
       Base = left;
-      Offset = right;
+      Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
       return true;
     }
   }

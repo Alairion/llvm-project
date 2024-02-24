@@ -59,8 +59,7 @@ AltairXRegisterInfo::intRegClass(unsigned int Size) {
   }
 }
 
-const TargetRegisterClass* AltairXRegisterInfo::MVTRegClass(MVT Type)
-{
+const TargetRegisterClass *AltairXRegisterInfo::MVTRegClass(MVT Type) {
   return intRegClass(Type.getSizeInBits());
 }
 

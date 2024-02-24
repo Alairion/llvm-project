@@ -1,6 +1,8 @@
 add_llvm_component_library(LLVMAltairXDesc
+  AltairXMCAsmBackend.cpp
   AltairXMCAsmInfo.cpp
   AltairXMCTargetDesc.cpp
+  AltairXMCCodeEmitter.cpp
   AltairXInstPrinter.cpp
 
   LINK_COMPONENTS
