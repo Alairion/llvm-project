@@ -57,7 +57,6 @@ AltairXTargetMachine::AltairXTargetMachine(const Target &T, const Triple &TT,
                         getEffectiveRelocModel(CM, RM),
                         getEffectiveCodeModel(CM, CodeModel::Medium), OL),
       TLOF(std::make_unique<AltairXTargetObjectFile>()) {
-  // initAsmInfo will display features by llc -march=altairx on 3.7
   initAsmInfo();
 }
 
