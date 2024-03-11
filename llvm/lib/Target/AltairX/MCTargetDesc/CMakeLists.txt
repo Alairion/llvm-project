@@ -1,4 +1,5 @@
 add_llvm_component_library(LLVMAltairXDesc
+  AltairXELFObjectWriter.cpp
   AltairXMCAsmBackend.cpp
   AltairXMCAsmInfo.cpp
   AltairXMCTargetDesc.cpp
