@@ -146,10 +146,10 @@ def RPLw : AltairXRegister<2, "PL", [], [RPLb], [ISubReg8]>, DwarfRegNum<[66]>;
 def RPLd : AltairXRegister<2, "PL", [], [RPLw], [ISubReg16]>, DwarfRegNum<[66]>;
 def RPL  : AltairXRegister<2, "PL", [], [RPLd], [ISubReg32]>, DwarfRegNum<[66]>;
 
-def RPHb : AltairXRegister<2, "PH", []>, DwarfRegNum<[67]>;
-def RPHw : AltairXRegister<2, "PH", [], [RPHb], [ISubReg8]>, DwarfRegNum<[67]>;
-def RPHd : AltairXRegister<2, "PH", [], [RPHw], [ISubReg16]>, DwarfRegNum<[67]>;
-def RPH  : AltairXRegister<2, "PH", [], [RPHd], [ISubReg32]>, DwarfRegNum<[67]>;
+def RPHb : AltairXRegister<3, "PH", []>, DwarfRegNum<[67]>;
+def RPHw : AltairXRegister<3, "PH", [], [RPHb], [ISubReg8]>, DwarfRegNum<[67]>;
+def RPHd : AltairXRegister<3, "PH", [], [RPHw], [ISubReg16]>, DwarfRegNum<[67]>;
+def RPH  : AltairXRegister<3, "PH", [], [RPHd], [ISubReg32]>, DwarfRegNum<[67]>;
 
 def QReg64 : RegisterClass<"AltairX", [i64], 64, (add RQ)>;
 def QReg32 : RegisterClass<"AltairX", [i32], 32, (add RQd)>;
