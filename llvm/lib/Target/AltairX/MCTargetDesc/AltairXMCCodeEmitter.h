@@ -15,10 +15,13 @@
 
 #include "llvm/MC/MCCodeEmitter.h"
 
+#include <cstdint>
+
 namespace llvm {
 
 class MCInstrInfo;
 class MCContext;
+class MCOperand;
 
 class AltairXMCCodeEmitter : public MCCodeEmitter {
 public:
@@ -26,12 +29,27 @@ public:
                                 MCContext &context)
       : MCII{instrInfo}, MCC{context} {}
 
+  std::uint32_t getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+                                  SmallVectorImpl<MCFixup> &Fixups,
+                                  const MCSubtargetInfo &STI) const;
+  
+  std::uint32_t getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
+                                   SmallVectorImpl<MCFixup> &Fixups,
+                                   const MCSubtargetInfo &STI) const;
+
 protected:
   void encodeInstruction(const MCInst &Inst, raw_ostream &OS,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
 
 private:
+
+  // getBinaryCodeForInstr - TableGen'erated function for getting the
+  // binary encoding for an instruction.
+  std::uint64_t getBinaryCodeForInstr(const MCInst &MI,
+                                      SmallVectorImpl<MCFixup> &Fixups,
+                                      const MCSubtargetInfo &STI) const;
+
   const MCInstrInfo &MCII;
   MCContext &MCC;
 };

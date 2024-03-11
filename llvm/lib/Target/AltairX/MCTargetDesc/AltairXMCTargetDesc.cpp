@@ -10,11 +10,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AltairXMCTargetDesc.h"
+#include "TargetInfo/AltairXTargetInfo.h"
+
 #include "AltairXInstPrinter.h"
 #include "AltairXMCAsmInfo.h"
+#include "AltairXMCAsmBackend.h"
 #include "AltairXMCCodeEmitter.h"
-#include "TargetInfo/AltairXTargetInfo.h"
+#include "AltairXMCTargetDesc.h"
+
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstPrinter.h"
@@ -42,6 +45,7 @@ static MCInstrInfo *createAltairXMCInstrInfo() {
 
 static MCRegisterInfo *createAltairXMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
+  InitAltairXMCRegisterInfo(X, AltairX::LR);
   return X;
 }
 
@@ -62,6 +66,13 @@ static MCInstPrinter *createAltairXMCInstPrinter(const Triple &T,
   return new AltairXInstPrinter(MAI, MII, MRI);
 }
 
+static MCAsmBackend *createAltairXMCAsmBackend(const Target &T,
+                                               const MCSubtargetInfo &STI,
+                                               const MCRegisterInfo &MRI,
+                                               const MCTargetOptions &Options) {
+  return new AltairXMCAsmBackend{T, STI, MRI, Options};
+}
+
 static MCAsmInfo *createAltairXMCAsmInfo(const MCRegisterInfo &MRI,
                                        const Triple &TT,
                                        const MCTargetOptions &Options) {
@@ -80,23 +91,20 @@ static MCCodeEmitter *createAltairXMCCodeEmitter(const MCInstrInfo &II,
 }
 
 extern "C" void LLVMInitializeAltairXTargetMC() {
-  for (Target *T : {&getTheAltairXTarget()}) {
-    // Register the MC asm info.
-    TargetRegistry::RegisterMCAsmInfo(*T, createAltairXMCAsmInfo);
+  Target* T = &getTheAltairXTarget();
 
-    // Register the MC instruction info.
-    TargetRegistry::RegisterMCInstrInfo(*T, createAltairXMCInstrInfo);
-
-    // Register the MC register info.
-    TargetRegistry::RegisterMCRegInfo(*T, createAltairXMCRegisterInfo);
-
-    // Register the MC subtarget info.
-    TargetRegistry::RegisterMCSubtargetInfo(*T, createAltairXMCSubtargetInfo);
-
-    // Register the MCInstPrinter.
-    TargetRegistry::RegisterMCInstPrinter(*T, createAltairXMCInstPrinter);
-
-    // Register the MCCodeEmitter
-    TargetRegistry::RegisterMCCodeEmitter(*T, createAltairXMCCodeEmitter);
-  }
+  // Register the MCCodeEmitter
+  TargetRegistry::RegisterMCAsmBackend(*T, createAltairXMCAsmBackend);
+  // Register the MC asm info.
+  TargetRegistry::RegisterMCAsmInfo(*T, createAltairXMCAsmInfo);
+  // Register the MC instruction info.
+  TargetRegistry::RegisterMCInstrInfo(*T, createAltairXMCInstrInfo);
+  // Register the MC register info.
+  TargetRegistry::RegisterMCRegInfo(*T, createAltairXMCRegisterInfo);
+  // Register the MC subtarget info.
+  TargetRegistry::RegisterMCSubtargetInfo(*T, createAltairXMCSubtargetInfo);
+  // Register the MCInstPrinter.
+  TargetRegistry::RegisterMCInstPrinter(*T, createAltairXMCInstPrinter);
+  // Register the MCCodeEmitter
+  TargetRegistry::RegisterMCCodeEmitter(*T, createAltairXMCCodeEmitter);
 }
