@@ -121,6 +121,11 @@ def JUMP : AltairXCallInst<OPCODE_JUMP,
   "jump", "$addr">;
 def : Pat<(AltairXjump texternalsym:$func), (JUMP texternalsym:$func)>;
 
+def JUMPBR  : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "jumpbr", 0b1000>;
+def CALLBR  : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "callbr", 0b1001>;
+def SYSCALL : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "syscall", 0b0010>;
+def INT     : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "int", 0b1010>;
+
 //===----------------------------------------------------------------------===//
 // Procedure return
 //===----------------------------------------------------------------------===//
@@ -129,7 +134,8 @@ def STD_AltairXret : SDTypeProfile<0, 0, []>;
 def AltairXret : SDNode<"AltairXISD::RET", STD_AltairXret, [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 let Uses = [LR], isReturn = 1, isBarrier = 1, hasDelaySlot = 1, isTerminator = 1, hasCtrlDep = 1 in
-def AltairXPseudoRET : AltairXPseudo<(outs), (ins), [(AltairXret)], "ret">;
+def RET  : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [(AltairXret)], "ret", 0b0100>;
+def RETI : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "reti", 0b1100>;
 
 //===----------------------------------------------------------------------===//
 // ALU basics operations
@@ -722,7 +728,9 @@ defm CMPULE : CMPInstImpl<setule>;
 // Branch
 //===----------------------------------------------------------------------===//
 
-def brtarget : Operand<OtherVT>;
+def brtarget : Operand<OtherVT> {
+  let EncoderMethod = "getBRTargetOpValue";
+}
 def condcode : Operand<i32> {
   let PrintMethod = "printCondCode";
 }
