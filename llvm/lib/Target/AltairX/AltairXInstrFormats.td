@@ -23,6 +23,7 @@ def InstFormatRegImm : InstFormat<2>;
 // https://docs.google.com/spreadsheets/d/1AmdMslRcXIX9pKGBSRJJcx2IvRyzBLjA61SzxmlEYf8/edit#gid=0
 class AltairXOpcode {
   bits<8> Value;
+  let Value{0} = 0;
 }
 
 let Value = 0 in
@@ -30,9 +31,8 @@ def OPCODE_TO_DETERMINE : AltairXOpcode;
 
 class AltairXOpcodeALU0<bits<4> val>
   : AltairXOpcode {
-  let Value{7-5} = 0b000;
-  let Value{4-1} = val;
-  let Value{0} = 0;
+  let Value{1-4} = val;
+  let Value{5-7} = 0b000;
 }
 
 def OPCODE_MOVEIX : AltairXOpcodeALU0<0b0000>;
@@ -42,16 +42,15 @@ def OPCODE_MOVEI : AltairXOpcodeALU0<0b0010>;
 def OPCODE_MOVEN : AltairXOpcodeALU0<0b1010>;
 def OPCODE_UMOVE : AltairXOpcodeALU0<0b1100>;
 
-def OPCODE_CMP  : AltairXOpcodeALU0<0b0001>;
-def OPCODE_TEST : AltairXOpcodeALU0<0b1001>;
-
 def OPCODE_CMOVE : AltairXOpcodeALU0<0b0011>;
-def OPCODE_SEXT : AltairXOpcodeALU0<0b1011>;
+def OPCODE_SEXT : AltairXOpcodeALU0<0b0001>;
+
+def OPCODE_CMP  : AltairXOpcodeALU0<0b0011>;
+def OPCODE_TEST : AltairXOpcodeALU0<0b1011>;
 
 class AltairXOpcodeALU1Generic // Used for se/stl implementation
   : AltairXOpcode {
-  let Value{7-5} = 0b100;
-  let Value{0} = 0;
+  let Value{5-7} = 0b100;
 }
 
 // SLT, SLTU, SE
@@ -73,9 +72,8 @@ def OPCODE_LSR : AltairXOpcodeALU1<0b1110>;
 
 class AltairXOpcodeLSU<bits<4> val>
   : AltairXOpcode {
-  let Value{7-5} = 0b010;
-  let Value{4-1} = val;
-  let Value{0} = 0;
+  let Value{1-4} = val;
+  let Value{5-7} = 0b010;
 }
 
 def OPCODE_LD   : AltairXOpcodeLSU<0b0000>;
@@ -93,9 +91,8 @@ def OPCODE_STVS : AltairXOpcodeLSU<0b1101>;
 
 class AltairXOpcodeMDU<bits<4> val>
   : AltairXOpcode {
-  let Value{7-5} = 0b011;
-  let Value{4-1} = val;
-  let Value{0} = 0;
+  let Value{1-4} = val;
+  let Value{5-7} = 0b011;
 }
 
 def OPCODE_DIV    : AltairXOpcodeMDU<0b0000>;
@@ -107,8 +104,7 @@ def OPCODE_MOVEQR : AltairXOpcodeMDU<0b1010>;
 
 class AltairXOpcodeGenericBranch // Used for brcond implementation
   : AltairXOpcode {
-  let Value{7-5} = 0b111;
-  let Value{0} = 0;
+  let Value{5-7} = 0b111;
 }
 
 // BNE, BEQ ,BL, BLE, BG, BGE, BLS, BLES, BGS, BGES
@@ -116,34 +112,31 @@ def OPCODE_B : AltairXOpcodeGenericBranch;
 
 class AltairXOpcodeBRU<bits<4> val>
   : AltairXOpcodeGenericBranch {
-  let Value{4-1} = val;
+  let Value{1-4} = val;
 }
 
 def OPCODE_BRA  : AltairXOpcodeBRU<0b0101>;
 
 def OPCODE_JUMP : AltairXOpcodeBRU<0b0011>;
 def OPCODE_CALL : AltairXOpcodeBRU<0b1011>;
-def OPCODE_RET  : AltairXOpcodeBRU<0b1111>;
+def OPCODE_SPECIAL_JUMP : AltairXOpcodeBRU<0b1111>;
 
 class AltairXOpcodeFPU<bits<4> val>
   : AltairXOpcode {
-  let Value{7-5} = 0b110;
-  let Value{4-1} = val;
-  let Value{0} = 0;
+  let Value{1-4} = val;
+  let Value{5-7} = 0b110;
 }
 
 class AltairXOpcodeFPUD<bits<4> val>
   : AltairXOpcode {
-  let Value{7-5} = 0b001;
-  let Value{4-1} = val;
-  let Value{0} = 0;
+  let Value{1-4} = val;
+  let Value{5-7} = 0b001;
 }
 
 class AltairXOpcodeEFU<bits<4> val>
   : AltairXOpcode {
-  let Value{7-5} = 0b101;
-  let Value{4-1} = val;
-  let Value{0} = 0;
+  let Value{1-4} = val;
+  let Value{5-7} = 0b101;
 }
 
 def OPCODE_MOVEIR : AltairXOpcodeEFU<0b0000>; // R <- LR/BR
@@ -360,9 +353,9 @@ class AltairXInstLSUSP<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
 // BRU
 class AltairXInstBR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegImm> {
-  bits<24> target;
+  bits<23> target;
 
-  let Inst{31-8} = target;
+  let Inst{31-9} = target;
   let Opcode = opcode.Value;
   
   let isBranch = 1;
@@ -375,6 +368,12 @@ class AltairXCallInst<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern
   bits<24> addr;
 
   let Inst{31-8} = addr;
+  let Opcode = opcode.Value;
+}
+
+class AltairXSpecialJumpInst<AltairXOpcode opcode, list<dag> pattern, string opcodestr, bits<4> command>
+  : AltairXInst<(outs), (ins), pattern, opcodestr, "", InstFormatRegImm> {
+  let Inst{11-8} = command;
   let Opcode = opcode.Value;
 }
 

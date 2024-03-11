@@ -231,7 +231,7 @@ void AltairXInstrInfo::loadRegFromStackSlot(
     .addMemOperand(MMO);
 }
 
-bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &) const {
+bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr & MI) const {
   return false;
 }
 

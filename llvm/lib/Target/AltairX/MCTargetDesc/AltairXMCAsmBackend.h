@@ -14,6 +14,7 @@
 #define LLVM_LIB_TARGET_ALTAIRX_MCASMBACKEND_ALTAIRXMCASMBACKEND_H
 
 #include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCFixup.h"
 
 namespace llvm {
 
@@ -21,6 +22,19 @@ class Target;
 class MCSubtargetInfo;
 class MCRegisterInfo;
 class MCTargetOptions;
+
+namespace AltairX {
+  enum Fixups {
+    // 23-bits pc-relative branch (bx, loop) 
+    fixup_altairx_pcrel_br_imm23 = FirstTargetFixupKind,
+    // 24-bits fixup for absolute jumps (call, jump, ...)
+    fixup_altairx_call_imm24,
+
+    // Marker
+    LastTargetFixupKind,
+    NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind
+  };
+} // end namespace AArch64
 
 class AltairXMCAsmBackend : public MCAsmBackend {
 public:
@@ -38,6 +52,9 @@ public:
 
   // Target Fixup Interfaces
   unsigned getNumFixupKinds() const override;
+  std::optional<MCFixupKind> getFixupKind(StringRef Name) const override;
+  const MCFixupKindInfo& getFixupKindInfo(MCFixupKind Kind) const override;
+
   void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                   const MCValue &Target, MutableArrayRef<char> Data,
                   uint64_t Value, bool IsResolved,
@@ -47,6 +64,8 @@ public:
   bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
                             const MCRelaxableFragment *DF,
                             const MCAsmLayout &Layout) const override;
+
+
 
 private:
   const Target &Target;
