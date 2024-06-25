@@ -66,6 +66,10 @@ AltairXMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       // Name, Offset (bits), Size (bits), Flags
       MCFixupKindInfo{"fixup_altairx_pcrel_br_imm23", 9, 23, pcrel},
       MCFixupKindInfo{"fixup_altairx_call_imm24", 8, 24, 0},
+      MCFixupKindInfo{"fixup_altairx_moveix9lo", 11, 9, 0},
+      MCFixupKindInfo{"fixup_altairx_moveix9hi24", 8, 24, 0},
+      MCFixupKindInfo{"fixup_altairx_moveix10lo", 10, 10, 0},
+      MCFixupKindInfo{"fixup_altairx_moveix10hi24", 8, 24, 0},
   };
 
   // Fixup kinds from .reloc directive do not require any extra processing.
@@ -91,7 +95,7 @@ std::uint64_t adjustFixupValue(const MCFixup &Fixup, const MCValue &Target,
                                bool IsResolved) {
   const auto signedValue = static_cast<std::int64_t>(Value);
 
-  switch(Fixup.getKind())
+  switch(static_cast<AltairX::Fixups>(Fixup.getKind()))
   {
   case AltairX::fixup_altairx_pcrel_br_imm23:
     if(signedValue % 4 != 0) {
@@ -101,13 +105,42 @@ std::uint64_t adjustFixupValue(const MCFixup &Fixup, const MCValue &Target,
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     }
     return Value >> 2;
+  case AltairX::fixup_altairx_call_imm24:
+    if(signedValue % 4 != 0) {
+      Ctx.reportError(Fixup.getLoc(), "fixup value bad alignement");
+    }
+    if(!isInt<26>(signedValue)) {
+      Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+    }
+    return Value >> 2;
+  case AltairX::fixup_altairx_moveix9lo:
+    if(!isInt<33>(signedValue)) {
+      Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+    }
+    // put sign at bit 9
+    return ((Value & 0x0100000000ull) >> 24) | ((Value >> 1) & 0xFFull);
+  case AltairX::fixup_altairx_moveix9hi24:
+    if(!isInt<33>(signedValue)) {
+      Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+    }
+    return (Value >> 9) ^ 0x00FFFFFFull;
+  case AltairX::fixup_altairx_moveix10lo:
+    if(!isInt<34>(signedValue)) {
+      Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+    }
+    // put sign at bit 10
+    return ((Value & 0x0200000000ull) >> 24) | ((Value >> 1) & 0x01FFull);
+  case AltairX::fixup_altairx_moveix10hi24:
+    if(!isInt<34>(signedValue)) {
+      Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
+    }
+    return (Value >> 10) ^ 0x00FFFFFFull;
   default:
     llvm_unreachable("Unknown fixup kind!");
   }
 }
 
 }
-
 
 void AltairXMCAsmBackend::applyFixup(const MCAssembler &Asm,
                                      const MCFixup &Fixup,

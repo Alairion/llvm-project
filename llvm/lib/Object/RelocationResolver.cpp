@@ -758,6 +758,49 @@ static uint64_t resolveWasm64(uint64_t Type, uint64_t Offset, uint64_t S,
   }
 }
 
+static bool supportsAltairX(uint64_t Type) {
+  switch (Type) {
+  case ELF::R_ALTAIRX_NONE:
+    return true;
+  case ELF::R_ALTAIRX_PCRELBR23:
+    return true;
+  case ELF::R_ALTAIRX_CALL24:
+    return true;
+  case ELF::R_ALTAIRX_MOVEIX9LO:
+    return true;
+  case ELF::R_ALTAIRX_MOVEIX9HI24:
+    return true;
+  case ELF::R_ALTAIRX_MOVEIX10LO:
+    return true;
+  case ELF::R_ALTAIRX_MOVEIX10HI24:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static uint64_t resolveAltairX(uint64_t Type, uint64_t Offset, uint64_t S,
+                               uint64_t LocData, int64_t Addend) {
+  switch(Type) {
+  case ELF::R_ALTAIRX_NONE:
+    return LocData;
+  case ELF::R_ALTAIRX_CALL24:
+    return S + Addend;
+  case ELF::R_ALTAIRX_PCRELBR23:
+    return S + Addend - Offset;
+  case ELF::R_ALTAIRX_MOVEIX9LO:
+    return S + Addend;
+  case ELF::R_ALTAIRX_MOVEIX9HI24:
+    return S + Addend;
+  case ELF::R_ALTAIRX_MOVEIX10LO:
+    return S + Addend;
+  case ELF::R_ALTAIRX_MOVEIX10HI24:
+    return S + Addend;
+  default:
+    llvm_unreachable("Invalid relocation type");
+  }
+}
+
 std::pair<SupportsRelocation, RelocationResolver>
 getRelocationResolver(const ObjectFile &Obj) {
   if (Obj.isCOFF()) {
@@ -801,6 +844,8 @@ getRelocationResolver(const ObjectFile &Obj) {
         return {supportsAmdgpu, resolveAmdgpu};
       case Triple::riscv64:
         return {supportsRISCV, resolveRISCV};
+      case Triple::altairx:
+        return {supportsAltairX, resolveAltairX};
       default:
         if (isAMDGPU(Obj))
           return {supportsAmdgpu, resolveAmdgpu};

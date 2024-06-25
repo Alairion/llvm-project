@@ -29,6 +29,14 @@ namespace AltairX {
     fixup_altairx_pcrel_br_imm23 = FirstTargetFixupKind,
     // 24-bits fixup for absolute jumps (call, jump, ...)
     fixup_altairx_call_imm24,
+    // 33-bits (sign-extended) fixup for low 9-bits. Next instruction must be a moveix.
+    fixup_altairx_moveix9lo,
+    // fixup for moveix high 24-bits.
+    fixup_altairx_moveix9hi24,
+    // 34-bits (sign-extended) fixup for low 10-bits. Next instruction must be a moveix.
+    fixup_altairx_moveix10lo,
+    // fixup for moveix high 24-bits.
+    fixup_altairx_moveix10hi24,
 
     // Marker
     LastTargetFixupKind,
