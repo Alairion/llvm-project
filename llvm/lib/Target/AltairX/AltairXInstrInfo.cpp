@@ -232,7 +232,25 @@ void AltairXInstrInfo::loadRegFromStackSlot(
 }
 
 bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr & MI) const {
-  return false;
+  MachineBasicBlock &MBB = *MI.getParent();
+  auto &Subtarget = MBB.getParent()->getSubtarget<AltairXSubtarget>();
+  auto TRI = Subtarget.getRegisterInfo();
+  DebugLoc DL = MI.getDebugLoc();
+
+  if (MI.getOpcode() == AltairX::AltairXGlobalAddrValue) {
+    const auto dest = MI.getOperand(0).getReg();
+    const auto *global = MI.getOperand(1).getGlobal();
+
+    BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::AddRIq))
+        .addReg(dest, getDefRegState(true))
+        .addReg(TRI->getZeroRegister(), 0)
+        .addGlobalAddress(global);
+  } else {
+    return false;
+  }
+
+  MBB.erase(MI);
+  return true;
 }
 
 MachineBasicBlock *
