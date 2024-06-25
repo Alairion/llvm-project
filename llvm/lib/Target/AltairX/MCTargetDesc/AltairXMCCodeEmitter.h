@@ -29,10 +29,13 @@ public:
                                 MCContext &context)
       : MCII{instrInfo}, MCC{context} {}
 
-  std::uint32_t getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+  std::uint64_t getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                                   SmallVectorImpl<MCFixup> &Fixups,
                                   const MCSubtargetInfo &STI) const;
   
+  std::uint64_t getLSUImmGlobalValue(const MCInst& MI, std::uint32_t OpIdx,
+                                        SmallVectorImpl<MCFixup>& Fixups,
+                                        const MCSubtargetInfo& STI) const;
 
   std::uint64_t getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
                                    SmallVectorImpl<MCFixup> &Fixups,
