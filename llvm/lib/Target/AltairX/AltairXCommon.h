@@ -25,6 +25,21 @@ enum class SCMPCondCode : std::uint32_t {
   AND = 0b1101, // Both not 0
 };
 
+// in instruction descr TSFlags
+enum InstFormat {
+  InstFormatPseudo = 0,
+  InstFormatMove = 1,
+  InstFormatRegReg = 2,
+  InstFormatRegRegShift = 3,
+  InstFormatALURegImm9 = 4,
+  InstFormatLSURegImm10 = 5,
+  InstFormatLSURegImm16 = 6,
+  InstFormatFPURegImm16 = 7,
+  InstFormatBRURelImm24 = 8,
+  InstFormatBRUAbsImm24 = 9,
+  InstFormatBRUSpecial = 10,
+};
+
 }
 
 #endif

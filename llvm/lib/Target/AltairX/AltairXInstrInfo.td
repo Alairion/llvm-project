@@ -58,10 +58,9 @@ defm "" : ShiftedUImm<16, 48>;
 
 // Addressing mode
 def addr : ComplexPattern<iPTR, 3, "selectAddr", [], []>;
-def addrimm : ComplexPattern<iPTR, 2, "selectAddrImm", [], []>;
-def addrimmsp : ComplexPattern<iPTR, 2, "selectAddrImmSP", [], []>;
+def addrimm : ComplexPattern<iPTR, 2, "selectAddrImm", [add, frameindex], []>;
+def addrimmsp : ComplexPattern<iPTR, 2, "selectAddrImmSP", [add], []>;
 
-// Global address
 def SDT_AltairXGAWRAPPER : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
 def AltairXGAWRAPPER : SDNode<"AltairXISD::GAWRAPPER", SDT_AltairXGAWRAPPER, []>;
 
@@ -101,10 +100,14 @@ let Defs = [R0], Uses = [R0] in {
 def STD_AltairXcall : SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>;
 def AltairXcall : SDNode<"AltairXISD::CALL", STD_AltairXcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
+def calltarget : Operand<i64> {
+  let EncoderMethod = "getCallTargetOpValue";
+}
+
 let Defs = [LR], Uses = [R0], isCall = 1, isBarrier = 1, hasDelaySlot = 1, hasCtrlDep = 1 in
 def CALL : AltairXCallInst<OPCODE_CALL,
   (outs),
-  (ins i64imm:$addr),
+  (ins calltarget:$addr),
   [(AltairXcall tglobaladdr:$addr)],
   "call", "$addr">;
 def : Pat<(AltairXcall texternalsym:$func), (CALL texternalsym:$func)>;
@@ -116,7 +119,7 @@ def AltairXjump : SDNode<"AltairXISD::JUMP", STD_AltairXcall, [SDNPHasChain, SDN
 let Uses = [R0], isCall = 1, isBarrier = 1, hasDelaySlot = 1, hasCtrlDep = 1 in
 def JUMP : AltairXCallInst<OPCODE_JUMP,
   (outs),
-  (ins i64imm:$addr),
+  (ins calltarget:$addr),
   [(AltairXjump tglobaladdr:$addr)],
   "jump", "$addr">;
 def : Pat<(AltairXjump texternalsym:$func), (JUMP texternalsym:$func)>;
@@ -136,6 +139,14 @@ def AltairXret : SDNode<"AltairXISD::RET", STD_AltairXret, [SDNPHasChain, SDNPOp
 let Uses = [LR], isReturn = 1, isBarrier = 1, hasDelaySlot = 1, isTerminator = 1, hasCtrlDep = 1 in
 def RET  : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [(AltairXret)], "ret", 0b0100>;
 def RETI : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "reti", 0b1100>;
+
+//===----------------------------------------------------------------------===//
+// MoveIX support
+//===----------------------------------------------------------------------===//
+
+// Parent format is used to know dynamically the size of the imm
+def MOVEIX9 : AltairXInstMoveIX<InstFormatALURegImm9, (outs), (ins i64imm:$imm), []>;
+def MOVEIX10 : AltairXInstMoveIX<InstFormatLSURegImm10, (outs), (ins i64imm:$imm), []>;
 
 //===----------------------------------------------------------------------===//
 // ALU basics operations
@@ -253,14 +264,14 @@ multiclass MDUInst<string name, AltairXOpcode opcode, SDNode opnode,
   }
 }
 
-defm DIV : MDUInst<"div", OPCODE_DIV, sdiv, [QReg8, QReg16, QReg32, QReg64], [RQRb, RQRw, RQRd, RQR]>;
-defm DIVU : MDUInst<"divu", OPCODE_DIVU, udiv, [QReg8, QReg16, QReg32, QReg64], [RQRb, RQRw, RQRd, RQR]>;
-defm REM : MDUInst<"div", OPCODE_DIV, srem, [QRReg8, QRReg16, QRReg32, QRReg64], [RQb, RQw, RQd, RQ]>;
-defm REMU : MDUInst<"divu", OPCODE_DIVU, urem, [QRReg8, QRReg16, QRReg32, QRReg64], [RQb, RQw, RQd, RQ]>;
+defm Div : MDUInst<"div", OPCODE_DIV, sdiv, [QReg8, QReg16, QReg32, QReg64], [RQRb, RQRw, RQRd, RQR]>;
+defm DivU : MDUInst<"divu", OPCODE_DIVU, udiv, [QReg8, QReg16, QReg32, QReg64], [RQRb, RQRw, RQRd, RQR]>;
+defm Rem : MDUInst<"div", OPCODE_DIV, srem, [QRReg8, QRReg16, QRReg32, QRReg64], [RQb, RQw, RQd, RQ]>;
+defm RemU : MDUInst<"divu", OPCODE_DIVU, urem, [QRReg8, QRReg16, QRReg32, QRReg64], [RQb, RQw, RQd, RQ]>;
 
-defm MUL : MDUInst<"mul", OPCODE_MUL, mul, [PLReg8, PLReg16, PLReg32, PLReg64], [RPHb, RPHw, RPHd, RPH]>;
-defm MULH : MDUInst<"mul", OPCODE_MUL, mulhs, [PHReg8, PHReg16, PHReg32, PHReg64], [RPLb, RPLw, RPLd, RPL]>;
-defm MULHU : MDUInst<"mulu", OPCODE_MULU, mulhu, [PHReg8, PHReg16, PHReg32, PHReg64], [RPLb, RPLw, RPLd, RPL]>;
+defm Mul : MDUInst<"mul", OPCODE_MUL, mul, [PLReg8, PLReg16, PLReg32, PLReg64], [RPHb, RPHw, RPHd, RPH]>;
+defm MulH : MDUInst<"mul", OPCODE_MUL, mulhs, [PHReg8, PHReg16, PHReg32, PHReg64], [RPLb, RPLw, RPLd, RPL]>;
+defm MulHU : MDUInst<"mulu", OPCODE_MULU, mulhu, [PHReg8, PHReg16, PHReg32, PHReg64], [RPLb, RPLw, RPLd, RPL]>;
 
 class MDUMoveInstRI<string name, AltairXOpcode opcode, RegisterClass outclass, RegisterClass inclass>
   : AltairXInstMDUMoveRI<opcode,
@@ -432,7 +443,7 @@ multiclass UMoveInstImpl<bits<2> shift, list<ImmLeaf> immpats> {
 defm UMove32 : UMoveInstImpl<2, [u8imm16sh32, u16imm16sh32, u32imm16sh32, u64imm16sh32]>;
 
 // TODO: 
-// MOVEUP | moveup | rA, imm             | imm(18)<<32
+// MOVEUP | moveup | rA, imm         | imm(18)<<32
 // EXT    | ext    | rA,rB,imm1,imm2 | rA = (rB>>imm1)&((1<<imm2)-1) 
 // INS    | ins    | rA,rB,imm1,imm2 | rA |= (rB<<imm1)&((1<<imm2)-1) 
 

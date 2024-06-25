@@ -60,6 +60,7 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
   // setBooleanVectorContents(ZeroOrOneBooleanContent);
 
+  setOperationAction(ISD::FrameIndex, MVT::i64, LegalizeAction::Expand);
   setOperationAction(ISD::GlobalAddress, MVT::i64, LegalizeAction::Custom);
   setOperationAction(ISD::BlockAddress, MVT::i64, LegalizeAction::Custom);
   setOperationAction(ISD::ConstantPool, MVT::i64, LegalizeAction::Custom);
@@ -548,12 +549,12 @@ SDValue AltairXTargetLowering::getGlobalAddressWrapper(
 
 SDValue AltairXTargetLowering::LowerGlobalAddress(SDValue Op,
                                                   SelectionDAG &DAG) const {
-  const GlobalAddressSDNode* node = cast<GlobalAddressSDNode>(Op);
-  const GlobalValue* value = node->getGlobal();
+  const GlobalAddressSDNode* global = cast<GlobalAddressSDNode>(Op);
+  const GlobalValue* value = global->getGlobal();
   const auto type = Op.getValueType();
 
-  SDLoc DL{node};
-  SDValue addr = DAG.getTargetGlobalAddress(value, DL, type, node->getOffset());
+  SDLoc DL{global};
+  SDValue addr = DAG.getTargetGlobalAddress(value, DL, type, global->getOffset());
   SDValue wrap = DAG.getNode(AltairXISD::GAWRAPPER, DL, type, addr);
 
   return wrap;
