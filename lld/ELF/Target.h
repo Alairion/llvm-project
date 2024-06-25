@@ -175,6 +175,7 @@ protected:
 };
 
 TargetInfo *getAArch64TargetInfo();
+TargetInfo* getAltairXTargetInfo();
 TargetInfo *getAMDGPUTargetInfo();
 TargetInfo *getARMTargetInfo();
 TargetInfo *getAVRTargetInfo();

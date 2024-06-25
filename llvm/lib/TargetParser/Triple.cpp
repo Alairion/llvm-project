@@ -543,6 +543,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("loongarch64", Triple::loongarch64)
     .Case("dxil", Triple::dxil)
     .Case("xtensa", Triple::xtensa)
+    .Case("altairx", Triple::altairx)
     .Default(Triple::UnknownArch);
 
   // Some architectures require special parsing logic just to compute the

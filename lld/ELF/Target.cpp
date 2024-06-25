@@ -54,6 +54,8 @@ TargetInfo *elf::getTarget() {
     return getX86TargetInfo();
   case EM_AARCH64:
     return getAArch64TargetInfo();
+  case EM_AltairX:
+    return getAltairXTargetInfo();
   case EM_AMDGPU:
     return getAMDGPUTargetInfo();
   case EM_ARM:
