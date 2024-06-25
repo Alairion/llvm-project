@@ -9,11 +9,29 @@
 #ifndef LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_ALTAIRX_H
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_ALTAIRX_H
 
-#include "Gnu.h"
+#include "clang/Driver/Tool.h"
 #include "clang/Driver/ToolChain.h"
 
 namespace clang {
 namespace driver {
+namespace tools {
+namespace altairx {
+
+class LLVM_LIBRARY_VISIBILITY Linker : public Tool {
+public:
+  explicit Linker(const ToolChain &TC) : Tool("altairx::Linker", "linker", TC) {}
+  bool isLinkJob() const override { return true; }
+  bool hasIntegratedCPP() const override { return false; }
+
+  void ConstructJob(Compilation &C, const JobAction &JA,
+                    const InputInfo &Output, const InputInfoList &Inputs,
+                    const llvm::opt::ArgList &TCArgs,
+                    const char *LinkingOutput) const override;
+};
+
+} // namespace altairx
+} // namespace tools
+
 namespace toolchains {
 
 class LLVM_LIBRARY_VISIBILITY AltairXToolChain : public ToolChain {
@@ -24,20 +42,9 @@ public:
   bool isPICDefault() const override;
   bool isPIEDefault(const llvm::opt::ArgList &Args) const override;
   bool isPICDefaultForced() const override;
-  bool SupportsProfiling() const override;
-  bool hasBlocksRuntime() const override;
-  void
-  AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
-                            llvm::opt::ArgStringList &CC1Args) const override {}
-  void
-  addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
-                        llvm::opt::ArgStringList &CC1Args,
-                        Action::OffloadKind DeviceOffloadKind) const override {}
-  void
-  AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
-                               llvm::opt::ArgStringList &CC1Args) const override {}
-  void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
-                           llvm::opt::ArgStringList &CmdArgs) const override {}
+
+  Tool* buildLinker() const override;
+
 };
 
 } // end namespace toolchains
