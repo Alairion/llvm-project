@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "AltairXCommon.h"
 #include "AltairXMCCodeEmitter.h"
 #include "AltairXMCAsmBackend.h"
 
@@ -32,6 +33,34 @@ namespace llvm {
 
 #include "AltairXGenCodeEmitter.inc"
 
+namespace {
+
+MCFixupKind getImmFixupFor(std::uint32_t type) noexcept
+{
+  switch(type) {
+  case AltairX::InstFormatALURegImm9:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9lo);
+  case AltairX::InstFormatLSURegImm10:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix10lo);
+  default:
+    llvm_unreachable("Missing MoveIX impl");
+  }
+
+  return FK_NONE;
+}
+
+MCFixupKind getMoveIXFixupFor(const MCInst& MI) noexcept {
+  switch (MI.getOpcode()) {
+  case AltairX::MOVEIX9:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9hi24);
+  case AltairX::MOVEIX10:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix10hi24);
+  default:
+    return FK_NONE;
+  }
+}
+
+} // namespace
 
 std::uint64_t
 AltairXMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
@@ -41,10 +70,36 @@ AltairXMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
     return MCC.getRegisterInfo()->getEncodingValue(MO.getReg());
   }
 
-  assert(MO.isImm() && "did not expect relocated expression");
-  return static_cast<std::uint32_t>(MO.getImm());
+  if (MO.isImm()) {
+    return static_cast<std::uint32_t>(MO.getImm());
+  }
+
+  assert(MO.isExpr() && "Expected an expression");
+
+  if(auto fixup = getMoveIXFixupFor(MI); fixup != 0) {
+    Fixups.emplace_back(MCFixup::create(
+      0, MO.getExpr(), fixup, MI.getLoc()));
+  } else {
+    Fixups.emplace_back(MCFixup::create(
+      0, MO.getExpr(), getImmFixupFor(MCII.get(MI.getOpcode()).TSFlags), MI.getLoc()));
+  }
+
+  return 0;
 }
 
+std::uint64_t AltairXMCCodeEmitter::getLSUImmGlobalValue(
+    const MCInst &MI, std::uint32_t OpIdx, SmallVectorImpl<MCFixup> &Fixups,
+    const MCSubtargetInfo &STI) const {
+  const MCOperand& MO = MI.getOperand(OpIdx);
+
+  if(MO.isImm()) {
+    return static_cast<std::uint32_t>(MO.getImm());
+  }
+
+  assert(MO.isExpr() && "Expected an expression");
+
+  return 0;
+}
 
 std::uint64_t
 AltairXMCCodeEmitter::getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
