@@ -33,9 +33,14 @@ public:
                                   SmallVectorImpl<MCFixup> &Fixups,
                                   const MCSubtargetInfo &STI) const;
   
-  std::uint32_t getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
+
+  std::uint64_t getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
                                    SmallVectorImpl<MCFixup> &Fixups,
                                    const MCSubtargetInfo &STI) const;
+
+  std::uint64_t getCallTargetOpValue(const MCInst& MI, std::uint32_t OpIdx,
+                                     SmallVectorImpl<MCFixup>& Fixups,
+                                     const MCSubtargetInfo& STI) const;
 
 protected:
   void encodeInstruction(const MCInst &Inst, raw_ostream &OS,
