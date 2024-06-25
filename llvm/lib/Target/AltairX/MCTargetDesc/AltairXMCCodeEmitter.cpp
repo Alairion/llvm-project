@@ -32,7 +32,8 @@ namespace llvm {
 
 #include "AltairXGenCodeEmitter.inc"
 
- std::uint32_t
+
+std::uint64_t
 AltairXMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                                         SmallVectorImpl<MCFixup> &Fixups,
                                         const MCSubtargetInfo &STI) const {
@@ -44,7 +45,8 @@ AltairXMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   return static_cast<std::uint32_t>(MO.getImm());
 }
 
-std::uint32_t
+
+std::uint64_t
 AltairXMCCodeEmitter::getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
                                          SmallVectorImpl<MCFixup> &Fixups,
                                          const MCSubtargetInfo &STI) const {
@@ -60,6 +62,30 @@ AltairXMCCodeEmitter::getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
       0, MO.getExpr(),
       static_cast<MCFixupKind>(AltairX::fixup_altairx_pcrel_br_imm23),
       MI.getLoc()));
+
+  //++MCNumFixups;
+
+  // All of the information is in the fixup.
+  return 0;
+}
+
+std::uint64_t
+AltairXMCCodeEmitter::getCallTargetOpValue(const MCInst& MI, std::uint32_t OpIdx,
+  SmallVectorImpl<MCFixup>& Fixups,
+  const MCSubtargetInfo& STI) const
+{
+  const MCOperand& MO = MI.getOperand(OpIdx);
+
+  // If the destination is an immediate, we have nothing to do.
+  if(MO.isImm()) {
+    return MO.getImm();
+  }
+  assert(MO.isExpr() && "Unexpected ADR target type!");
+
+  Fixups.emplace_back(MCFixup::create(
+    0, MO.getExpr(),
+    static_cast<MCFixupKind>(AltairX::fixup_altairx_call_imm24),
+    MI.getLoc()));
 
   //++MCNumFixups;
 

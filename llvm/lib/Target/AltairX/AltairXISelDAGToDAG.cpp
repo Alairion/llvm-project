@@ -72,11 +72,8 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
 
   SDLoc DL{N};
 
-  if(N.getOpcode() == AltairXISD::GAWRAPPER) {
-    Base = N.getOperand(0);
-    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
-    Shift = CurDAG->getTargetConstant(0, DL, MVT::i64);
-    return true;
+  if(N.getOpcode() != ISD::ADD) {
+    return false;
   }
 
   SDValue left = N.getOperand(0);
@@ -98,7 +95,7 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
   }
 
   // Try to match Reg + Reg
-  if(N.getOpcode() == ISD::ADD && !isa<ConstantSDNode>(right)) {
+  if(!isa<ConstantSDNode>(right)) {
     Base = left;
     Offset = right;
     Shift = CurDAG->getTargetConstant(0, DL, MVT::i64);
@@ -113,6 +110,19 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
   // Load at given address directly
   SDLoc DL{N};
 
+  if(N.getOpcode() == ISD::FrameIndex) {
+    auto* node = cast<FrameIndexSDNode>(N);
+    Base = CurDAG->getTargetFrameIndex(node->getIndex(), MVT::i64);
+    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    return true;
+  }
+
+  if(N.getOpcode() == AltairXISD::GAWRAPPER) {
+    Base = CurDAG->getRegister(AltairX::ZERO, MVT::i64);
+    Offset = N.getOperand(0);
+    return true;
+  }
+
   if (N.getOpcode() != ISD::ADD) {
     Base = N;
     Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
@@ -126,6 +136,15 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
     const auto constval = value->getSExtValue();
     if(isInt<32>(constval)) {
       Base = left;
+      Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
+      return true;
+    }
+  }
+
+  if(auto* value = dyn_cast<ConstantSDNode>(left); value) {
+    const auto constval = value->getSExtValue();
+    if(isInt<32>(constval)) {
+      Base = right;
       Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
       return true;
     }

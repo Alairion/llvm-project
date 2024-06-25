@@ -53,7 +53,7 @@ void AltairXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
        MI->getOpcode() == AltairX::AddRIw ||
        MI->getOpcode() == AltairX::AddRId ||
        MI->getOpcode() == AltairX::AddRIq) &&
-      MI->getOperand(2).getImm() == 0) {
+      MI->getOperand(2).isImm() && MI->getOperand(2).getImm() == 0) {
     O << '\t' << "move ";
     printOperand(MI, 0, O);
     O << ", ";
