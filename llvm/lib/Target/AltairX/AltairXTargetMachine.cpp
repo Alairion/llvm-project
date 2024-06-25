@@ -26,6 +26,9 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAltairXTarget() {
   // Register the target.
   //- Little endian Target Machine
   RegisterTargetMachine<AltairXTargetMachine> X(getTheAltairXTarget());
+
+  PassRegistry* PR = PassRegistry::getPassRegistry();
+  initializeAltairXMoveIXFillerPass(*PR);
 }
 
 static std::string computeDataLayout() {
@@ -114,4 +117,6 @@ bool AltairXPassConfig::addInstSelector() {
 // Implemented by targets that want to run passes immediately before
 // machine code is emitted. return true if -print-machineinstrs should
 // print out the code after the passes.
-void AltairXPassConfig::addPreEmitPass() {}
+void AltairXPassConfig::addPreEmitPass() {
+  addPass(createAltairXMoveIXFillerPass());
+}
