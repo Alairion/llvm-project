@@ -20,8 +20,11 @@
 
 namespace llvm {
 class FunctionPass;
+class PassRegistry;
 
 // Declare functions to create passes here!
+FunctionPass *createAltairXMoveIXFillerPass();
+void initializeAltairXMoveIXFillerPass(PassRegistry&);
 
 } // namespace llvm
 
