@@ -19,6 +19,7 @@ add_llvm_target(AltairXCodeGen
   AltairXFrameLowering.cpp
   AltairXInstrInfo.cpp
   AltairXISelLowering.cpp
+  AltairXMoveIXFiller.cpp
   AltairXRegisterInfo.cpp
   AltairXSubtarget.cpp
   AltairXTargetObjectFile.cpp
