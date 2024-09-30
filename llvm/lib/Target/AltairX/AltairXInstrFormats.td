@@ -51,33 +51,39 @@ def OPCODE_MOVEI : AltairXOpcodeALU0<0b0010>;
 def OPCODE_MOVEN : AltairXOpcodeALU0<0b1010>;
 def OPCODE_UMOVE : AltairXOpcodeALU0<0b1100>;
 
-def OPCODE_CMOVE : AltairXOpcodeALU0<0b0011>;
 def OPCODE_SEXT : AltairXOpcodeALU0<0b0001>;
 
 def OPCODE_CMP  : AltairXOpcodeALU0<0b0011>;
 def OPCODE_TEST : AltairXOpcodeALU0<0b1011>;
 
-class AltairXOpcodeALU1Generic // Used for se/stl implementation
+class AltairXOpcodeALU1Generic // Used for se/sen/slt implementation
   : AltairXOpcode {
   let Value{5-7} = 0b100;
 }
 
-// SLT, SLTU, SE
-def OPCODE_SCMP : AltairXOpcodeALU1Generic;
-
 class AltairXOpcodeALU1<bits<4> val>
   : AltairXOpcodeALU1Generic {
-  let Value{4-1} = val;
+  let Value{1-4} = val;
 }
 
 def OPCODE_ADD : AltairXOpcodeALU1<0b0000>;
 def OPCODE_SUB : AltairXOpcodeALU1<0b1000>;
 def OPCODE_XOR : AltairXOpcodeALU1<0b0100>;
-def OPCODE_OR : AltairXOpcodeALU1<0b1100>;
+def OPCODE_OR  : AltairXOpcodeALU1<0b1100>;
 def OPCODE_AND : AltairXOpcodeALU1<0b0010>;
 def OPCODE_LSL : AltairXOpcodeALU1<0b1010>;
 def OPCODE_ASR : AltairXOpcodeALU1<0b0110>;
 def OPCODE_LSR : AltairXOpcodeALU1<0b1110>;
+
+def OPCODE_SE   : AltairXOpcodeALU1<0b0001>;
+def OPCODE_SEN  : AltairXOpcodeALU1<0b1001>;
+def OPCODE_SLTS : AltairXOpcodeALU1<0b0101>;
+def OPCODE_SLTU : AltairXOpcodeALU1<0b1101>;
+
+def OPCODE_SAND   : AltairXOpcodeALU1<0b0011>;
+def OPCODE_SBIT   : AltairXOpcodeALU1<0b1011>;
+def OPCODE_CMOVEN : AltairXOpcodeALU1<0b0111>;
+def OPCODE_CMOVE  : AltairXOpcodeALU1<0b1111>;
 
 class AltairXOpcodeLSU<bits<4> val>
   : AltairXOpcode {
@@ -191,7 +197,7 @@ class AltairXInstMoveIX<InstFormat parentFormat, dag outs, dag ins, list<dag> pa
   bits<24> imm;
 
   let Inst{31-8} = imm;
-  let Opcode = 0b00000001; // always a second slot instruction
+  let Opcode = 0; // always a second slot instruction
 }
 
 class AltairXInstALURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
@@ -407,7 +413,7 @@ class AltairXCallInst<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern
 
 class AltairXSpecialJumpInst<AltairXOpcode opcode, list<dag> pattern, string opcodestr, bits<4> command>
   : AltairXInst<(outs), (ins), pattern, opcodestr, "", InstFormatBRUSpecial> {
-  let Inst{11-8} = command;
+  let Inst{8-11} = command;
   let Opcode = opcode.Value;
 }
 
