@@ -52,6 +52,7 @@ multiclass SizedUImm<int size> {
   def u8imm#size  : ImmLeaf<i8,  "return isUInt<" # size # ">(Imm);">;
 }
 
+defm "" : SizedUImm<3>;
 defm "" : SizedUImm<18>;
 
 //multiclass ShiftedUImm<int size, int shift> {
@@ -233,17 +234,21 @@ defm Xor : ALUInst<"xor", OPCODE_XOR, xor>;
 defm Or  : ALUInst<"or", OPCODE_OR, or>;
 defm And : ALUInst<"and", OPCODE_AND, and>;
 
+def shiftAmount : Operand<i64> {
+  let EncoderMethod = "getImmOpValue";
+}
+
 // Shifts always use 64-bits immediates
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 multiclass ALUInstShift<string name, AltairXOpcode opcode, SDNode opnode> {
   def RRq : ALUInstRR<!strconcat(name, ".q"),  3, opcode, opnode, GPIReg64>;
-  def RIq : ALUInstRI<!strconcat(name, ".q"), 3, opcode, opnode, GPIReg64, i64imm, s64imm32>;
+  def RIq : ALUInstRI<!strconcat(name, ".q"), 3, opcode, opnode, GPIReg64, shiftAmount, s64imm32>;
   def RRd : ALUInstRR<!strconcat(name, ".d"),  2, opcode, opnode, GPIReg32>;
-  def RId : ALUInstRI<!strconcat(name, ".d"), 2, opcode, opnode, GPIReg32, i64imm, s64imm32>;
+  def RId : ALUInstRI<!strconcat(name, ".d"), 2, opcode, opnode, GPIReg32, shiftAmount, s64imm32>;
   def RRw : ALUInstRR<!strconcat(name, ".w"),  1, opcode, opnode, GPIReg16>;
-  def RIw : ALUInstRI<!strconcat(name, ".w"), 1, opcode, opnode, GPIReg16, i64imm, s64imm32>;
+  def RIw : ALUInstRI<!strconcat(name, ".w"), 1, opcode, opnode, GPIReg16, shiftAmount, s64imm32>;
   def RRb : ALUInstRR<!strconcat(name, ".b"),  0, opcode, opnode, GPIReg8>;
-  def RIb : ALUInstRI<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8, i64imm, s64imm32>;
+  def RIb : ALUInstRI<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8, shiftAmount, s64imm32>;
 }
 
 defm Lsl : ALUInstShift<"lsl", OPCODE_LSL, shl>;
@@ -535,8 +540,8 @@ let canFoldAsLoad = 1, isReMaterializable = 1, hasSideEffects = 0, mayLoad = 1 i
 class LoadRRInst<RegisterClass regclass, SDPatternOperator opnode, bits<2> size, string sizename> 
   : AltairXInstLSURR<OPCODE_LD, size,
   (outs regclass:$reg),
-  (ins GPIReg64:$base, GPIReg64:$offset, i64imm:$shift),
-  [(set regclass:$reg, (opnode (addr GPIReg64:$base, GPIReg64:$offset, i64imm:$shift)))],
+  (ins GPIReg64:$base, GPIReg64:$offset, shiftAmount:$shift),
+  [(set regclass:$reg, (opnode (addr GPIReg64:$base, GPIReg64:$offset, u64imm3:$shift)))],
   !strconcat("ld.", sizename), "$reg, $base[$offset << $shift]"> {
 }
 
@@ -629,13 +634,13 @@ def LoadSPdAX64 : LoadSPInst<GPIReg64, extloadi32_i64, 2, "d">;
 // sextload: actually perform a sext
 multiclass SExtLoadPat<PatFrag loadpat, SExt sextinst, LoadRRInst loadrrinst, LoadRIInst loadriinst, LoadSPInst loadspinst> {
   // reg-reg version
-  def : Pat<(loadpat (addr GPIReg64:$base, GPIReg64:$offset, i64imm:$shift)), 
-    (sextinst (loadrrinst GPIReg64:$base, GPIReg64:$offset, i64imm:$shift))>;
+  def : Pat<(loadpat (addr GPIReg64:$base, GPIReg64:$offset, u64imm3:$shift)),
+    (sextinst (loadrrinst GPIReg64:$base, GPIReg64:$offset, u64imm3:$shift))>;
   // reg-imm version
-  def : Pat<(loadpat (addrimm GPIReg64:$base, i64imm:$offset)), 
+  def : Pat<(loadpat (addrimm GPIReg64:$base, i64imm:$offset)),
     (sextinst (loadriinst GPIReg64:$base, i64imm:$offset))>;
   // reg-imm stack pointer version
-  def : Pat<(loadpat (addrimmsp GPIReg64:$base, i64imm:$offset)), 
+  def : Pat<(loadpat (addrimmsp GPIReg64:$base, i64imm:$offset)),
     (sextinst (loadspinst GPIReg64:$base, i64imm:$offset))>;
 }
 
