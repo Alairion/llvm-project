@@ -18,6 +18,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -31,6 +32,7 @@ using namespace llvm;
 
 #define GET_INSTRINFO_CTOR_DTOR
 #include "AltairXGenInstrInfo.inc"
+#include "AltairXGenDFAPacketizer.inc"
 
 namespace {
 
@@ -231,20 +233,78 @@ void AltairXInstrInfo::loadRegFromStackSlot(
     .addMemOperand(MMO);
 }
 
-bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr & MI) const {
+namespace {
+
+bool isConstantToReg(const MachineInstr &MI) {
+  return MI.getOpcode() == AltairX::ConstantToRegb ||
+         MI.getOpcode() == AltairX::ConstantToRegw ||
+         MI.getOpcode() == AltairX::ConstantToRegd ||
+         MI.getOpcode() == AltairX::ConstantToRegq;
+}
+
+std::uint32_t getMoveIForReg(MCRegister Reg) {
+  if (AltairX::GPIReg64RegClass.contains(Reg)) {
+    return AltairX::MoveIq;
+  } else if (AltairX::GPIReg32RegClass.contains(Reg)) {
+    return AltairX::MoveId;
+  } else if (AltairX::GPIReg16RegClass.contains(Reg)) {
+    return AltairX::MoveIw;
+  } else if (AltairX::GPIReg8RegClass.contains(Reg)) {
+    return AltairX::MoveIb;
+  }
+
+  llvm_unreachable("Wrong register class");
+}
+
+} // namespace
+
+bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   MachineBasicBlock &MBB = *MI.getParent();
-  auto &Subtarget = MBB.getParent()->getSubtarget<AltairXSubtarget>();
   auto TRI = Subtarget.getRegisterInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   if (MI.getOpcode() == AltairX::AltairXGlobalAddrValue) {
     const auto dest = MI.getOperand(0).getReg();
-    const auto *global = MI.getOperand(1).getGlobal();
+    const GlobalValue *global = MI.getOperand(1).getGlobal();
 
     BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::AddRIq))
         .addReg(dest, getDefRegState(true))
         .addReg(TRI->getZeroRegister(), 0)
         .addGlobalAddress(global);
+  } else if (isConstantToReg(MI)) {
+    const auto dest = MI.getOperand(0).getReg();
+    const std::int64_t imm = MI.getOperand(1).getImm();
+
+    if (isInt<42>(imm)) {
+      // Fits movei + moveix
+      BuildMI(MBB, MI, MI.getDebugLoc(), get(getMoveIForReg(dest)))
+          .addReg(dest, getDefRegState(true))
+          .addImm(imm);
+    } else {
+      assert(AltairX::GPIReg64RegClass.contains(dest));
+      // movei + moveix supports the following ranges:
+      // 0000 0000 0000 0000 to 0000 01FF FFFF FFFF (2^41-1)
+      // FFFF FE00 0000 0000 (-2^41) to FFFF FFFF FFFF FFFF
+      // Range that we have to cover somehow
+      // 0000 0200 0000 0000 (2^41) to FFFF FDFF FFFF FFFF (-2^41 - 1)
+      const std::uint64_t uimm = static_cast<std::uint64_t>(imm);
+      const auto lowvalue = uimm & 0xFFFFFFFFull;
+      const auto highvalue = (uimm >> 32) & 0xFFFFFFFFull;
+
+      BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::MoveIq))
+        .addReg(dest, getDefRegState(true))
+        .addImm(highvalue);
+      
+      BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::LslRIq))
+        .addReg(dest)
+        .addReg(dest)
+        .addImm(32);
+
+      BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::AddRIq))
+        .addReg(dest)
+        .addReg(dest)
+        .addImm(lowvalue);
+    }
   } else {
     return false;
   }
@@ -253,13 +313,181 @@ bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr & MI) const {
   return true;
 }
 
+bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
+                                     MachineBasicBlock *&TBB,
+                                     MachineBasicBlock *&FBB,
+                                     SmallVectorImpl<MachineOperand> &Cond,
+                                     bool AllowModify) const {
+  return true; // Can't handle indirect branch.
+  auto last = MBB.getLastNonDebugInstr();
+  if (last == MBB.end()) {
+    return false;
+  }
+
+  if (!isUnpredicatedTerminator(*last)) {
+    return false;
+  }
+
+  // If there is only one terminator instruction, process it.
+  auto secondLast = std::prev(last);
+  if(last == MBB.begin() || !isUnpredicatedTerminator(*secondLast)) {
+    if(isUncondBranchOpcode(*last)) {
+      TBB = getBranchDestBlock(*last);
+      return false;
+    }
+    
+    if(isCondBranchOpcode(*last)) {
+      // Block ends with fall-through condbranch.
+      TBB = getBranchDestBlock(*last);
+      Cond.emplace_back(last->getOperand(1));
+      return false;
+    }
+
+    return true; // Can't handle indirect branch.
+  }
+
+  // If AllowModify is true and the block ends with two or more unconditional
+  // branches, delete all but the first unconditional branch.
+  if (AllowModify && isUncondBranchOpcode(*secondLast)) {
+    auto it = secondLast;
+    while (isUncondBranchOpcode(*secondLast)) {
+      last->eraseFromParent();
+      last = secondLast;
+      if (it == MBB.begin() || !isUnpredicatedTerminator(*--it)) {
+        // Return now the only terminator is an unconditional branch.
+        TBB = last->getOperand(0).getMBB();
+        return false;
+      } else {
+        secondLast = to_address(it);
+      }
+    }
+  }
+
+  // If we're allowed to modify and the block ends in a unconditional branch
+  // which could simply fallthrough, remove the branch.
+  if(AllowModify && isUncondBranchOpcode(*last) &&
+      MBB.isLayoutSuccessor(getBranchDestBlock(*last))) {
+    last->eraseFromParent();
+    last = secondLast;
+    secondLast = std::prev(secondLast);
+    if (last == MBB.begin() || !isUnpredicatedTerminator(*secondLast)) {
+      assert(!isUncondBranchOpcode(*last) &&
+             "unreachable unconditional branches removed above");
+
+      if (isCondBranchOpcode(*last)) {
+        // Block ends with fall-through condbranch.
+        TBB = getBranchDestBlock(*last);
+        Cond.emplace_back(last->getOperand(1));
+        return false;
+      }
+
+      return true; // Can't handle indirect branch.
+    }
+  }
+
+  // If the block ends with a B and a Bcc, handle it.
+  if(isCondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
+    TBB = getBranchDestBlock(*secondLast);
+    Cond.emplace_back(secondLast->getOperand(1));
+    FBB = getBranchDestBlock(*last);
+    return false;
+  }
+
+  // If the block ends with two unconditional branches, handle it.  The second
+  // one is not executed, so remove it.
+  if(isUncondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
+    TBB = TBB = getBranchDestBlock(*secondLast);
+    if (AllowModify) {
+      last->eraseFromParent();
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
+unsigned AltairXInstrInfo::removeBranch(MachineBasicBlock &MBB,
+                                        int *BytesRemoved) const {
+  auto last = MBB.getLastNonDebugInstr();
+  if(last == MBB.end()) {
+    return 0;
+  }
+
+  if (!isUncondBranchOpcode(*last) && !isCondBranchOpcode(*last)) {
+    return 0;
+  }
+
+  // Remove the branch.
+  last->eraseFromParent();
+  if (MBB.empty()) {
+    if (BytesRemoved) {
+      *BytesRemoved = 4;
+    }
+
+    return 1;
+  }
+
+  // We may have two branches with the first one being a conditional and the
+  // last a non conditional
+  last = MBB.getLastNonDebugInstr();
+  if (!isCondBranchOpcode(*last)) {
+    if (BytesRemoved) {
+      *BytesRemoved = 4;
+    }
+
+    return 1;
+  }
+
+  // Remove the branch.
+  last->eraseFromParent();
+  if (BytesRemoved) {
+    *BytesRemoved = 8;
+  }
+
+  return 2;
+}
+
+unsigned AltairXInstrInfo::insertBranch(MachineBasicBlock &MBB,
+                                        MachineBasicBlock *TBB,
+                                        MachineBasicBlock *FBB,
+                                        ArrayRef<MachineOperand> Cond,
+                                        const DebugLoc &DL,
+                                        int *BytesAdded) const {
+  // Shouldn't be a fall through.
+  assert(TBB && "insertBranch must not be told to insert a fallthrough");
+
+  if(!FBB) {
+    if (Cond.empty()) { // Unconditional branch
+      BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(TBB);
+    } else {
+      BuildMI(&MBB, DL, get(AltairX::B)).addMBB(TBB).addImm(Cond[0].getImm());
+    }
+
+    if (BytesAdded) {
+      *BytesAdded = 4;
+    }
+
+    return 1;
+  }
+
+  // Two-way conditional branch.
+  BuildMI(&MBB, DL, get(AltairX::B)).addMBB(TBB).addImm(Cond[0].getImm());
+  BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(FBB);
+  if (BytesAdded) {
+    *BytesAdded = 8;
+  }
+
+  return 2;
+}
+
 MachineBasicBlock *
 AltairXInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
   switch (MI.getOpcode()) {
   case AltairX::BRA:
-    return MI.getOperand(0).getMBB();
+    [[fallthrough]];
   case AltairX::B:
-    return MI.getOperand(1).getMBB();
+    return MI.getOperand(0).getMBB();
   default:
     llvm_unreachable("unexpected opcode!");
   }

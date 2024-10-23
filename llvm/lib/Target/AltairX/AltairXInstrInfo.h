@@ -52,9 +52,28 @@ public:
                             const TargetRegisterInfo *TRI,
                             Register VReg) const override;
 
+  bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
+                     MachineBasicBlock *&FBB,
+                     SmallVectorImpl<MachineOperand> &Cond,
+                     bool AllowModify) const override;
 
+  unsigned removeBranch(MachineBasicBlock &MBB,
+                        int *BytesRemoved = nullptr) const override;
+
+  unsigned insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
+                        MachineBasicBlock *FBB, ArrayRef<MachineOperand> Cond,
+                        const DebugLoc &DL,
+                        int *BytesAdded = nullptr) const override;
 
   MachineBasicBlock* getBranchDestBlock(const MachineInstr& MI) const override;
+
+  static bool isUncondBranchOpcode(const MachineInstr &MI) {
+    return MI.getOpcode() == AltairX::BRA;
+  }
+
+  static bool isCondBranchOpcode(const MachineInstr &MI) {
+    return MI.getOpcode() == AltairX::B;
+  }
 
 protected:
   const AltairXSubtarget &Subtarget;

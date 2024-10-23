@@ -119,10 +119,12 @@ std::string_view SCMPCondCodeToString(AltairX::SCMPCondCode condCode)
   switch(condCode) {
   case AltairX::SCMPCondCode::EQ:
     return "e";
-  case AltairX::SCMPCondCode::L:
+  case AltairX::SCMPCondCode::NE:
+    return "en";
+  case AltairX::SCMPCondCode::LT:
     return "lt";
-  case AltairX::SCMPCondCode::LS:
-    return "lts";
+  case AltairX::SCMPCondCode::LTU:
+    return "ltu";
   default:
     llvm_unreachable("Invalid AltairX::SCMPCondCode");
     break;

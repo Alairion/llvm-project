@@ -14,6 +14,7 @@
 #define LLVM_LIB_TARGET_ALTAIRX_MCCODEEMITTER_ALTAIRXMCCODEEMITTER_H
 
 #include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCFixup.h"
 
 #include <cstdint>
 
@@ -29,18 +30,29 @@ public:
                                 MCContext &context)
       : MCII{instrInfo}, MCC{context} {}
 
+  // For most instructions, works for regs, imms and expression
+  // This may apply fixup to value for moveix support!
   std::uint64_t getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                                   SmallVectorImpl<MCFixup> &Fixups,
                                   const MCSubtargetInfo &STI) const;
-  
-  std::uint64_t getLSUImmGlobalValue(const MCInst& MI, std::uint32_t OpIdx,
-                                        SmallVectorImpl<MCFixup>& Fixups,
-                                        const MCSubtargetInfo& STI) const;
 
+  // For imm only operands (e.g. condcode operand type)
+  std::uint64_t getImmOpValue(const MCInst &MI, std::uint32_t OpIdx,
+                              SmallVectorImpl<MCFixup> &Fixups,
+                              const MCSubtargetInfo &STI) const;
+
+  // For imm value of moveix, MI flags will be used to determine the fixup type
+  // to generate using the instruction type
+  std::uint64_t getMoveIXOpValue(const MCInst &MI, std::uint32_t OpIdx,
+                                 SmallVectorImpl<MCFixup> &Fixups,
+                                 const MCSubtargetInfo &STI) const;
+
+  // For imm value of pcrel branches (brtarget operand type)
   std::uint64_t getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
                                    SmallVectorImpl<MCFixup> &Fixups,
                                    const MCSubtargetInfo &STI) const;
 
+  // For imm value of absolute branches (brtarget operand type)
   std::uint64_t getCallTargetOpValue(const MCInst& MI, std::uint32_t OpIdx,
                                      SmallVectorImpl<MCFixup>& Fixups,
                                      const MCSubtargetInfo& STI) const;
@@ -51,6 +63,8 @@ protected:
                          const MCSubtargetInfo &STI) const override;
 
 private:
+  MCFixupKind getImmFixupFor(const MCInst& MI) const;
+  MCFixupKind getMoveIXFixupFor(const MCInst& MI) const;
 
   // getBinaryCodeForInstr - TableGen'erated function for getting the
   // binary encoding for an instruction.

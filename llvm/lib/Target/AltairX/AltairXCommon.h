@@ -20,15 +20,15 @@ enum class CondCode : std::uint32_t {
 
 enum class SCMPCondCode : std::uint32_t {
   EQ = 0b0001, // Equal
-  L = 0b1001, // Less
-  LS = 0b0101, // Less (signed)
-  AND = 0b1101, // Both not 0
+  NE = 0b1001, // Not Equal
+  LT = 0b0101, // Less (signed)
+  LTU = 0b1101, // Less (unsigned)
 };
 
 // in instruction descr TSFlags
 enum InstFormat {
   InstFormatPseudo = 0,
-  InstFormatMove = 1,
+  InstFormatMoveImm18 = 1,
   InstFormatRegReg = 2,
   InstFormatRegRegShift = 3,
   InstFormatALURegImm9 = 4,

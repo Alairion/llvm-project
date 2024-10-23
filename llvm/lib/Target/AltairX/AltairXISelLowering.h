@@ -26,14 +26,15 @@ enum NodeType {
   // Start the numbering from where ISD NodeType finishes.
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
 
-  RET, // AltairXRET
-  CALL, // AltairXCALL
-  JUMP, // AltairXJUMP
-  BRCOND, // AltairXBRCOND
-  SCMP, // AltairXSCMP
-  CMOVE, // AltairXCMOVE
-  CMOVETMP, // AltairXCMOVE
-  GAWRAPPER, // AltairXGAWRAPPER
+  CONSTANTTOREG,
+  RET,
+  CALL,
+  JUMP,
+  CMP,
+  BRCOND,
+  SBIT,
+  CMOVE,
+  GAWRAPPER,
 };
 }
 
@@ -44,23 +45,16 @@ public:
   explicit AltairXTargetLowering(const TargetMachine &TM,
                                  const AltairXSubtarget &STI);
 
-  const char *getTargetNodeName(unsigned Opcode) const override;
+  SDValue LowerOperation(SDValue Op, SelectionDAG& DAG) const override;
 
-  SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
-  void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
-                          SelectionDAG &DAG) const override;
+  const char *getTargetNodeName(unsigned Opcode) const override;
 
 protected:
   // Subtarget Info
   const AltairXSubtarget &Subtarget;
 
 private:
-  SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerReturnAddr(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerSELECT_CC(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerBRCOND(SDValue Op, SelectionDAG& DAG) const;
+  EVT getSetCCResultType(const DataLayout&, LLVMContext&, EVT VT) const override;
 
   using RegsToPassVector = SmallVector<std::pair<unsigned int, SDValue>, 8>;
 
@@ -90,6 +84,15 @@ private:
   SDValue LowerMemOpCallTo(SDValue Chain, SDValue Arg, const SDLoc &dl,
                            SelectionDAG &DAG, const CCValAssign &VA,
                            ISD::ArgFlagsTy Flags) const;
+
+  SDValue LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerBlockAddress(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerConstantPool(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerReturnAddr(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerSETCC(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerSELECT_CC(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerBRCOND(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerBR_CC(SDValue Op, SelectionDAG& DAG) const;
 };
 } // namespace llvm
 

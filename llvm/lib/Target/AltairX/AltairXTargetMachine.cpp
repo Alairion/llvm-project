@@ -98,6 +98,7 @@ public:
 
   bool addInstSelector() override;
   void addPreEmitPass() override;
+  void addPreEmitPass2() override;
 };
 } // namespace
 
@@ -119,4 +120,8 @@ bool AltairXPassConfig::addInstSelector() {
 // print out the code after the passes.
 void AltairXPassConfig::addPreEmitPass() {
   addPass(createAltairXMoveIXFillerPass());
+}
+
+void AltairXPassConfig::addPreEmitPass2() {
+  
 }
