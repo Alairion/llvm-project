@@ -84,7 +84,7 @@ std::uint32_t immOperandIndex(const MachineInstr& inst)
   case AltairX::InstFormatLSURegImm10:
     return 2;
   case AltairX::InstFormatLSURegImm16:
-    llvm_unreachable("LDP/STP must not be matched if imm exceed 16-bits!");
+    return 1;
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
   case AltairX::InstFormatBRURelImm24:
@@ -109,10 +109,10 @@ std::uint32_t getMoveIX(const MachineInstr& inst)
     llvm_unreachable("LDP/STP must not be matched if imm exceed 16-bits!");
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
-  case AltairX::InstFormatBRURelImm24:
+    return AltairX::MOVEIX24PCREL;
     llvm_unreachable("todo: moveix");
   case AltairX::InstFormatBRUAbsImm24:
-    llvm_unreachable("todo: moveix");
+    return AltairX::MOVEIX24ABS;
   default:
     return false;
   }
