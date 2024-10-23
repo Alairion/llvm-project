@@ -53,6 +53,8 @@ namespace
 
 bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
   switch (inst.getDesc().TSFlags) {
+  case AltairX::InstFormatMoveImm18:
+    return llvm::isInt<18>(imm);
   case AltairX::InstFormatALURegImm9:
     return llvm::isInt<9>(imm);
   case AltairX::InstFormatLSURegImm10:
@@ -75,12 +77,14 @@ inline constexpr std::uint32_t noImm = std::numeric_limits<std::uint32_t>::max()
 std::uint32_t immOperandIndex(const MachineInstr& inst)
 {
   switch(inst.getDesc().TSFlags) {
+  case AltairX::InstFormatMoveImm18:
+    return 1;
   case AltairX::InstFormatALURegImm9:
     return 2;
   case AltairX::InstFormatLSURegImm10:
     return 2;
   case AltairX::InstFormatLSURegImm16:
-    return 1;
+    llvm_unreachable("LDP/STP must not be matched if imm exceed 16-bits!");
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
   case AltairX::InstFormatBRURelImm24:
@@ -95,12 +99,14 @@ std::uint32_t immOperandIndex(const MachineInstr& inst)
 std::uint32_t getMoveIX(const MachineInstr& inst)
 {
   switch(inst.getDesc().TSFlags) {
+  case AltairX::InstFormatMoveImm18:
+    return AltairX::MOVEIX18;
   case AltairX::InstFormatALURegImm9:
     return AltairX::MOVEIX9;
   case AltairX::InstFormatLSURegImm10:
     return AltairX::MOVEIX10;
   case AltairX::InstFormatLSURegImm16:
-    llvm_unreachable("todo: moveix");
+    llvm_unreachable("LDP/STP must not be matched if imm exceed 16-bits!");
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
   case AltairX::InstFormatBRURelImm24:
@@ -129,8 +135,13 @@ void AltairXMoveIXFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
         .addGlobalAddress(op.getGlobal());
       ++it;
     } else if (op.isImm() && !fitsImm(*it, op.getImm())) {
-      BuildMI(MBB, std::next(it), it->getDebugLoc(), TII->get(getMoveIX(*it)))
-          .addImm(op.getImm());
+      MachineBasicBlock::iterator last =
+          BuildMI(MBB, std::next(it), it->getDebugLoc(),
+                  TII->get(getMoveIX(*it)))
+              .addImm(op.getImm());
+      last->bundleWithPred();
+      
+      finalizeBundle(MBB, it.getInstrIterator(), std::next(last).getInstrIterator());
       ++it;
     }
   }

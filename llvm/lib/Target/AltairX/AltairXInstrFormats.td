@@ -14,7 +14,7 @@ class InstFormat<bits<64> val> {
   bits<64> Value = val;
 }
 def InstFormatPseudo : InstFormat<0>;
-def InstFormatMove : InstFormat<1>;
+def InstFormatMoveImm18 : InstFormat<1>;
 def InstFormatRegReg : InstFormat<2>;
 def InstFormatRegRegShift : InstFormat<3>;
 def InstFormatALURegImm9 : InstFormat<4>;
@@ -45,11 +45,9 @@ class AltairXOpcodeALU0<bits<4> val>
 }
 
 def OPCODE_MOVEIX : AltairXOpcodeALU0<0b0000>;
+def OPCODE_MOVEI : AltairXOpcodeALU0<0b1000>;
 def OPCODE_EXT : AltairXOpcodeALU0<0b0110>;
 def OPCODE_INS : AltairXOpcodeALU0<0b1110>;
-def OPCODE_MOVEI : AltairXOpcodeALU0<0b0010>;
-def OPCODE_MOVEN : AltairXOpcodeALU0<0b1010>;
-def OPCODE_UMOVE : AltairXOpcodeALU0<0b1100>;
 
 def OPCODE_SEXT : AltairXOpcodeALU0<0b0001>;
 
@@ -271,8 +269,8 @@ class AltairXInstCMPRI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let isCompare = 1;
 }
 
-class AltairXInstMove<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMove> {
+class AltairXInstMoveI<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMoveImm18> {
   bits<6> rd;
   bits<18> imm;
 
@@ -280,19 +278,6 @@ class AltairXInstMove<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern
   let Inst{25-8} = imm;
   let Opcode = opcode.Value;
 
-  let isMoveImm = true;
-}
-
-class AltairXInstMoveShift<AltairXOpcode opcode, bits<2> shift, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMove> {
-  bits<6> rd;
-  bits<16> imm;
-
-  let Inst{31-26} = rd;
-  let Inst{25-10} = imm;
-  let Inst{8-9} = shift;
-  let Opcode = opcode.Value;
-  
   let isMoveImm = true;
 }
 
@@ -324,7 +309,7 @@ class AltairXInstMDURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
 }
 
 class AltairXInstMDUMoveRI<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMove> {
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rd;
   bits<6> pq;
 
@@ -337,7 +322,7 @@ class AltairXInstMDUMoveRI<AltairXOpcode opcode, dag outs, dag ins, list<dag> pa
 }
 
 class AltairXInstMDUMoveIR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMove> {
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rs1;
   bits<6> pq;
 
@@ -419,7 +404,7 @@ class AltairXSpecialJumpInst<AltairXOpcode opcode, list<dag> pattern, string opc
 
 // CU
 class AltairXInstCUMoveIR<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMove> {
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rs1;
   bits<6> ri;
 
@@ -431,7 +416,7 @@ class AltairXInstCUMoveIR<dag outs, dag ins, list<dag> pattern, string opcodestr
 }
 
 class AltairXInstCUMoveRI<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMove> {
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rd;
   bits<6> ri;
 

@@ -33,6 +33,16 @@ multiclass SizedSImm<int size> {
 }
 
 defm "" : SizedSImm<32>;
+defm "" : SizedSImm<64>;
+
+multiclass SizedSTImm<int size> {
+  def s64timm#size : TImmLeaf<i64, "return isInt<" # size # ">(Imm);">;
+  def s32timm#size : TImmLeaf<i32, "return isInt<" # size # ">(Imm);">;
+  def s16timm#size : TImmLeaf<i16, "return isInt<" # size # ">(Imm);">;
+  def s8timm#size  : TImmLeaf<i8,  "return isInt<" # size # ">(Imm);">;
+}
+
+defm "" : SizedSTImm<64>;
 
 // Integer x-bits unsigned immediate for each type
 multiclass SizedUImm<int size> {
@@ -44,17 +54,8 @@ multiclass SizedUImm<int size> {
 
 defm "" : SizedUImm<18>;
 
-// Integer x-bits unsigned shifted immediate for each type
-multiclass ShiftedUImm<int size, int shift> {
-  def u64imm#size#sh#shift : ImmLeaf<i64, "return isShiftedUInt<" # size # "," # shift # ">(Imm);">;
-  def u32imm#size#sh#shift : ImmLeaf<i32, "return isShiftedUInt<" # size # "," # shift # ">(Imm);">;
-  def u16imm#size#sh#shift : ImmLeaf<i16, "return isShiftedUInt<" # size # "," # shift # ">(Imm);">;
-  def u8imm#size#sh#shift  : ImmLeaf<i8,  "return isShiftedUInt<" # size # "," # shift # ">(Imm);">;
-}
-
-defm "" : ShiftedUImm<16, 16>;
-defm "" : ShiftedUImm<16, 32>;
-defm "" : ShiftedUImm<16, 48>;
+//multiclass ShiftedUImm<int size, int shift> {
+//  def u64imm#size#sh#shift : ImmLeaf<i64, "return isShiftedUInt<" # size # "," # shift # ">(Imm);">;
 
 // Addressing mode
 def addr : ComplexPattern<iPTR, 3, "selectAddr", [], []>;
@@ -101,33 +102,69 @@ def STD_AltairXcall : SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>;
 def AltairXcall : SDNode<"AltairXISD::CALL", STD_AltairXcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
 def calltarget : Operand<i64> {
-  let EncoderMethod = "getCallTargetOpValue";
+  let EncoderMethod = "getBRTargetOpValue";
 }
 
 let Defs = [LR], Uses = [R0], isCall = 1, isBarrier = 1, hasDelaySlot = 1, hasCtrlDep = 1 in
-def CALL : AltairXCallInst<OPCODE_CALL,
+def Call : AltairXCallInst<OPCODE_CALL,
   (outs),
   (ins calltarget:$addr),
   [(AltairXcall tglobaladdr:$addr)],
   "call", "$addr">;
-def : Pat<(AltairXcall texternalsym:$func), (CALL texternalsym:$func)>;
+def : Pat<(AltairXcall texternalsym:$func), (Call texternalsym:$func)>;
 
 // Jump, do not set LR (link register)
 def STD_AltairXjump : SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>;
 def AltairXjump : SDNode<"AltairXISD::JUMP", STD_AltairXcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
 let Uses = [R0], isCall = 1, isBarrier = 1, hasDelaySlot = 1, hasCtrlDep = 1 in
-def JUMP : AltairXCallInst<OPCODE_JUMP,
+def Jump : AltairXCallInst<OPCODE_JUMP,
   (outs),
   (ins calltarget:$addr),
   [(AltairXjump tglobaladdr:$addr)],
   "jump", "$addr">;
-def : Pat<(AltairXjump texternalsym:$func), (JUMP texternalsym:$func)>;
+def : Pat<(AltairXjump texternalsym:$func), (Jump texternalsym:$func)>;
 
 def JUMPBR  : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "jumpbr", 0b1000>;
 def CALLBR  : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "callbr", 0b1001>;
 def SYSCALL : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "syscall", 0b0010>;
-def INT     : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "int", 0b1010>;
+//def INT     : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "int", 0b1010>;
+
+//===----------------------------------------------------------------------===//
+// Branches
+//===----------------------------------------------------------------------===//
+
+def brtarget : Operand<OtherVT> {
+  let EncoderMethod = "getCallTargetOpValue";
+  //let OperandType = "OPERAND_PCREL";
+}
+def condcode : Operand<i32> {
+  let EncoderMethod = "getImmOpValue";
+  let PrintMethod = "printCondCode";
+}
+
+// AltairXISD::BRCOND $bb, $cond, $cmpflag
+def SDT_AltairXbrcond : SDTypeProfile<0, 3, [SDTCisVT<0, OtherVT>, SDTCisVT<1, i32>, SDTCisVT<2, i64>]>;
+def AltairXbrcond : SDNode<"AltairXISD::BRCOND", SDT_AltairXbrcond, [SDNPHasChain]>;
+
+let Uses = [CmpFlag] in
+def B 
+  : AltairXInstBR<OPCODE_B,
+    (outs),
+    (ins brtarget:$target, condcode:$cond),
+    [(AltairXbrcond bb:$target, imm:$cond, CmpFlag)],
+    "b${cond}", "$target"> {
+
+  bits<4> cond;
+  let Inst{4-1} = cond;
+}
+
+let isBarrier = 1 in
+def BRA : AltairXInstBR<OPCODE_BRA,
+  (outs),
+  (ins brtarget:$target),
+  [(br bb:$target)],
+  "bra", "$target">;
 
 //===----------------------------------------------------------------------===//
 // Procedure return
@@ -144,9 +181,18 @@ def RETI : AltairXSpecialJumpInst<OPCODE_SPECIAL_JUMP, [], "reti", 0b1100>;
 // MoveIX support
 //===----------------------------------------------------------------------===//
 
+// moveix encoding of imm is a bit tricky, but basically consist of:
+// (imm >> N) ^ -1 for most signed imm and (imm >> N) for unsigned immediates
+def moveiximm : Operand<i64> {
+  let EncoderMethod = "getMoveIXOpValue";
+}
+
 // Parent format is used to know dynamically the size of the imm
-def MOVEIX9 : AltairXInstMoveIX<InstFormatALURegImm9, (outs), (ins i64imm:$imm), []>;
-def MOVEIX10 : AltairXInstMoveIX<InstFormatLSURegImm10, (outs), (ins i64imm:$imm), []>;
+def MOVEIX24PCREL : AltairXInstMoveIX<InstFormatBRURelImm24, (outs), (ins moveiximm:$imm), []>;
+def MOVEIX24ABS : AltairXInstMoveIX<InstFormatBRUAbsImm24, (outs), (ins moveiximm:$imm), []>;
+def MOVEIX9 : AltairXInstMoveIX<InstFormatALURegImm9, (outs), (ins moveiximm:$imm), []>;
+def MOVEIX10 : AltairXInstMoveIX<InstFormatLSURegImm10, (outs), (ins moveiximm:$imm), []>;
+def MOVEIX18 : AltairXInstMoveIX<InstFormatMoveImm18, (outs), (ins moveiximm:$imm), []>;
 
 //===----------------------------------------------------------------------===//
 // ALU basics operations
@@ -170,13 +216,13 @@ class ALUInstRI<string name, bits<2> size, AltairXOpcode opcode, SDNode opnode, 
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 multiclass ALUInst<string name, AltairXOpcode opcode, SDNode opnode> {
-  def RRq : ALUInstRR<!strconcat(name, ".q"),  3, opcode, opnode, GPIReg64>;
+  def RRq : ALUInstRR<!strconcat(name, ".q"), 3, opcode, opnode, GPIReg64>;
   def RIq : ALUInstRI<!strconcat(name, ".q"), 3, opcode, opnode, GPIReg64, i64imm, s64imm32>;
-  def RRd : ALUInstRR<!strconcat(name, ".d"),  2, opcode, opnode, GPIReg32>;
+  def RRd : ALUInstRR<!strconcat(name, ".d"), 2, opcode, opnode, GPIReg32>;
   def RId : ALUInstRI<!strconcat(name, ".d"), 2, opcode, opnode, GPIReg32, i32imm, s32imm32>;
-  def RRw : ALUInstRR<!strconcat(name, ".w"),  1, opcode, opnode, GPIReg16>;
+  def RRw : ALUInstRR<!strconcat(name, ".w"), 1, opcode, opnode, GPIReg16>;
   def RIw : ALUInstRI<!strconcat(name, ".w"), 1, opcode, opnode, GPIReg16, i16imm, s16imm32>;
-  def RRb : ALUInstRR<!strconcat(name, ".b"),  0, opcode, opnode, GPIReg8>;
+  def RRb : ALUInstRR<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8>;
   def RIb : ALUInstRI<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8, i8imm, s8imm32>;
 }
 
@@ -339,14 +385,21 @@ def : Pat<(i16 (trunc GPIReg64:$src)), (EXTRACT_SUBREG GPIReg64:$src, ISubReg16)
 def : Pat<(i16 (trunc GPIReg32:$src)), (EXTRACT_SUBREG GPIReg32:$src, ISubReg16)>;
 def : Pat<(i32 (trunc GPIReg64:$src)), (EXTRACT_SUBREG GPIReg64:$src, ISubReg32)>;
 
-// zext
-// Generic zext, simply "add.<targetsize> value, 0" to zext.
-def : Pat<(i16 (zext GPIReg8:$src)), (SUBREG_TO_REG GPIReg16, (AddRIb GPIReg8:$src, 0), ISubReg16)>;
-def : Pat<(i32 (zext GPIReg8:$src)), (SUBREG_TO_REG GPIReg32, (AddRIb GPIReg8:$src, 0), ISubReg32)>;
-def : Pat<(i64 (zext GPIReg8:$src)), (SUBREG_TO_REG GPIReg64, (AddRIb GPIReg8:$src, 0), ISubReg8)>;
-def : Pat<(i32 (zext GPIReg16:$src)), (SUBREG_TO_REG GPIReg32, (AddRIw GPIReg16:$src, 0), ISubReg32)>;
+// anyext/zext
+// Generic anyext/zext, simply "add.<targetsize> value, 0" to zext.
+// This will be a fallback
+def : Pat<(i64 (zext GPIReg8:$src)),  (SUBREG_TO_REG GPIReg64, (AddRIb GPIReg8:$src, 0), ISubReg8)>;
 def : Pat<(i64 (zext GPIReg16:$src)), (SUBREG_TO_REG GPIReg64, (AddRIw GPIReg16:$src, 0), ISubReg16)>;
 def : Pat<(i64 (zext GPIReg32:$src)), (SUBREG_TO_REG GPIReg64, (AddRId GPIReg32:$src, 0), ISubReg32)>;
+def : Pat<(i32 (zext GPIReg8:$src)),  (SUBREG_TO_REG GPIReg32, (AddRIb GPIReg8:$src,  0), ISubReg8)>;
+def : Pat<(i32 (zext GPIReg16:$src)), (SUBREG_TO_REG GPIReg32, (AddRIw GPIReg16:$src, 0), ISubReg16)>;
+def : Pat<(i16 (zext GPIReg8:$src)),  (SUBREG_TO_REG GPIReg16, (AddRIb GPIReg8:$src,  0), ISubReg8)>;
+def : Pat<(i16 (anyext GPIReg8:$src)),  (SUBREG_TO_REG GPIReg16, (AddRIb GPIReg8:$src,  0), ISubReg8)>;
+def : Pat<(i32 (anyext GPIReg8:$src)),  (SUBREG_TO_REG GPIReg32, (AddRIb GPIReg8:$src,  0), ISubReg8)>;
+def : Pat<(i32 (anyext GPIReg16:$src)), (SUBREG_TO_REG GPIReg32, (AddRIw GPIReg16:$src, 0), ISubReg16)>;
+def : Pat<(i64 (anyext GPIReg8:$src)),  (SUBREG_TO_REG GPIReg64, (AddRIb GPIReg8:$src,  0), ISubReg8)>;
+def : Pat<(i64 (anyext GPIReg16:$src)), (SUBREG_TO_REG GPIReg64, (AddRIw GPIReg16:$src, 0), ISubReg16)>;
+def : Pat<(i64 (anyext GPIReg32:$src)), (SUBREG_TO_REG GPIReg64, (AddRId GPIReg32:$src, 0), ISubReg32)>;
 
 // Any instruction that defines a x-bit result leaves the high half of the register to 0
 // except the ones that may become no-op such as Truncate which may become EXTRACT_SUBREG.
@@ -359,7 +412,7 @@ multiclass ZExtPats<list<PatLeaf> pats, list<RegisterClass> regclasses> {
   defvar reg32 = regclasses[2];
   defvar reg64 = regclasses[3];
 
-  // Use a SUBREG_TO_REG to utilize implicit zext, this is possible when the x-bit value is defined by
+  // Use a SUBREG_TO_REG to utilize implicit anyext/zext, this is possible when the x-bit value is defined by
   // an operation that implicitly zext.
   def : Pat<(i64 (zext pat8:$src)), (SUBREG_TO_REG reg64, reg8:$src, ISubReg8)>;
   def : Pat<(i64 (zext pat16:$src)), (SUBREG_TO_REG reg64, reg16:$src, ISubReg16)>;
@@ -367,6 +420,12 @@ multiclass ZExtPats<list<PatLeaf> pats, list<RegisterClass> regclasses> {
   def : Pat<(i32 (zext pat8:$src)), (SUBREG_TO_REG reg32, reg8:$src, ISubReg8)>;
   def : Pat<(i32 (zext pat16:$src)), (SUBREG_TO_REG reg32, reg16:$src, ISubReg16)>;
   def : Pat<(i16 (zext pat8:$src)), (SUBREG_TO_REG reg16, reg8:$src, ISubReg8)>;
+  def : Pat<(i64 (anyext pat8:$src)), (SUBREG_TO_REG reg64, reg8:$src, ISubReg8)>;
+  def : Pat<(i64 (anyext pat16:$src)), (SUBREG_TO_REG reg64, reg16:$src, ISubReg16)>;
+  def : Pat<(i64 (anyext pat32:$src)), (SUBREG_TO_REG reg64, reg32:$src, ISubReg32)>;
+  def : Pat<(i32 (anyext pat8:$src)), (SUBREG_TO_REG reg32, reg8:$src, ISubReg8)>;
+  def : Pat<(i32 (anyext pat16:$src)), (SUBREG_TO_REG reg32, reg16:$src, ISubReg16)>;
+  def : Pat<(i16 (anyext pat8:$src)), (SUBREG_TO_REG reg16, reg8:$src, ISubReg8)>;
   // Optimize "and-based" zext. This may be generated by an extend of trunc.
   def : Pat<(i64 (and (anyext pat8:$src), (i64 0xFFFFFFFF))), (SUBREG_TO_REG reg64, reg8:$src, ISubReg8)>;
   def : Pat<(i64 (and (anyext pat16:$src), (i64 0xFFFFFFFF))), (SUBREG_TO_REG reg64, reg16:$src, ISubReg16)>;
@@ -398,52 +457,48 @@ defm : ZExtPats<
 // Constant move
 //===----------------------------------------------------------------------===//
 
-// MoveI: Move 18-bits unsigned immediate, upper bits are set to 0
-class MoveInst<string name, AltairXOpcode opcode, RegisterClass regclass, Operand immop, ImmLeaf immpat>
-  : AltairXInstMove<opcode,
+// x = AltairXISD::MOVECONSTANT $val
+// This ISD instruction can be used to force a constant out of a instruction by creating an wrapper node
+def SDT_AltairXConstantToReg : SDTypeProfile<1, 1, [SDTCisInt<0>, SDTCisSameAs<0, 1>]>;
+def AltairXConstantToReg : SDNode<"AltairXISD::CONSTANTTOREG", SDT_AltairXConstantToReg, []>;
+
+// mayLoad because for bigger imms we may put value in executable data and load from that location
+let hasSideEffects = 0, mayLoad = 1 in
+class ConstantToReg<RegisterClass regclass, Operand immop, ImmLeaf immpat>
+  : AltairXPseudo<
     (outs regclass:$rd),
     (ins immop:$imm),
     [(set regclass:$rd, immpat:$imm)],
-    name, "$rd, $imm">;
+    "move $rd, $imm"> {
+}
 
-def MoveIb : MoveInst<"movei", OPCODE_MOVEI, GPIReg8, i8imm, u8imm18>;
-def MoveIw : MoveInst<"movei", OPCODE_MOVEI, GPIReg16, i16imm, u16imm18>;
-def MoveId : MoveInst<"movei", OPCODE_MOVEI, GPIReg32, i32imm, u32imm18>;
-def MoveIq : MoveInst<"movei", OPCODE_MOVEI, GPIReg64, i64imm, u64imm18>;
+def ConstantToRegb : ConstantToReg<GPIReg8,  i8imm,  s8imm64>;
+def ConstantToRegw : ConstantToReg<GPIReg16, i16imm, s16imm64>;
+def ConstantToRegd : ConstantToReg<GPIReg32, i32imm, s32imm64>;
+def ConstantToRegq : ConstantToReg<GPIReg64, i64imm, s64imm64>;
 
-// moven: Move 18-bits **negative** immediate, upper bits are set to 1
-def n8imm18  : ImmLeaf<i8,  [{ return -128 <= Imm && Imm < 0; }]>;
-def n16imm18 : ImmLeaf<i16, [{ return -32768 <= Imm && Imm < 0; }]>;
-def n32imm18 : ImmLeaf<i32, [{ return -262144 <= Imm && Imm < 0; }]>;
-def n64imm18 : ImmLeaf<i64, [{ return -262144 <= Imm && Imm < 0; }]>;
+def : Pat<(AltairXConstantToReg s8timm64:$imm), (ConstantToRegb $imm)>;
+def : Pat<(AltairXConstantToReg s16timm64:$imm), (ConstantToRegw $imm)>;
+def : Pat<(AltairXConstantToReg s32timm64:$imm), (ConstantToRegd $imm)>;
+def : Pat<(AltairXConstantToReg s64timm64:$imm), (ConstantToRegq $imm)>;
 
-def MoveNb : MoveInst<"moven", OPCODE_MOVEN, GPIReg8, i8imm, n8imm18>;
-def MoveNw : MoveInst<"moven", OPCODE_MOVEN, GPIReg16, i16imm, n16imm18>;
-def MoveNd : MoveInst<"moven", OPCODE_MOVEN, GPIReg32, i32imm, n32imm18>;
-def MoveNq : MoveInst<"moven", OPCODE_MOVEN, GPIReg64, i64imm, n64imm18>;
-
-// umove: Move 16-bits shifted immeditates, other bits are set to 0
-class UMoveInst<bits<2> shift, RegisterClass regclass, Operand immop, ImmLeaf immpat> 
-  : AltairXInstMoveShift<OPCODE_UMOVE, shift,
+// MoveI: Move 18-bits signed imm
+// Can be moveix-ed for a total of 42 (18 + 24) bits signed imm
+// Typed version are for code generation, this instruction has no size parameter!
+class MoveInst<string name, AltairXOpcode opcode, RegisterClass regclass, Operand immop>
+  : AltairXInstMoveI<opcode,
     (outs regclass:$rd),
     (ins immop:$imm),
-    [(set regclass:$rd, immpat:$imm)],
-    "umove", "$rd, $imm"> {
+    [], // no pattern, will be generated by extension of ConstantToReg on postRA expand
+    name, "$rd, $imm"> {
 }
 
-// UMove0 unneeded, because MoveI can handle 16-bits values already!
-multiclass UMoveInstImpl<bits<2> shift, list<ImmLeaf> immpats> {
-  def b : UMoveInst<shift, GPIReg8,  i8imm,  immpats[0]>;
-  def w : UMoveInst<shift, GPIReg16, i16imm, immpats[1]>;
-  def d : UMoveInst<shift, GPIReg32, i32imm, immpats[2]>;
-  def q : UMoveInst<shift, GPIReg64, i64imm, immpats[3]>;
-}
+def MoveIb : MoveInst<"movei", OPCODE_MOVEI, GPIReg8 , i8imm>;
+def MoveIw : MoveInst<"movei", OPCODE_MOVEI, GPIReg16, i16imm>;
+def MoveId : MoveInst<"movei", OPCODE_MOVEI, GPIReg32, i32imm>;
+def MoveIq : MoveInst<"movei", OPCODE_MOVEI, GPIReg64, i64imm>;
 
-// TODO: simplify!!
-defm UMove32 : UMoveInstImpl<2, [u8imm16sh32, u16imm16sh32, u32imm16sh32, u64imm16sh32]>;
-
-// TODO: 
-// MOVEUP | moveup | rA, imm         | imm(18)<<32
+// TODO:
 // EXT    | ext    | rA,rB,imm1,imm2 | rA = (rB>>imm1)&((1<<imm2)-1) 
 // INS    | ins    | rA,rB,imm1,imm2 | rA |= (rB<<imm1)&((1<<imm2)-1) 
 
@@ -672,7 +727,7 @@ def StoreSPdT64 : StoreSPInst<GPIReg64, truncstorei32, 2, "d">;
 //===----------------------------------------------------------------------===//
 
 // Some registers such as the accumulators of the DIV and MUL instructions (MDURegs regclasses)
-// require to be copied into a GPIReg to loaded stored
+// require to be copied into a GPIReg to be loaded or stored
 // Also, depending on the frame register used in practice (either R0 or R31), and the offset,
 // we have different instructions that may be used.
 // These pseudo instruction are generated and expanded in Prologue/Epilogue Insertion & Frame Finalization
@@ -702,132 +757,157 @@ def RELOADq : SpillInst<SpillableReg64>;
 // Comparisons
 //===----------------------------------------------------------------------===//
 
-class CMPInstRR<bits<2> size, string sizename, SDPatternOperator setccop, RegisterClass regclass> 
+// iX = AltairXISD::CMP iY, iY
+def SDT_AltairXcmp : SDTypeProfile<0, 2, [SDTCisInt<0>, SDTCisSameAs<0, 1>]>;
+def AltairXcmp : SDNode<"AltairXISD::CMP", SDT_AltairXcmp, []>;
+
+let isCompare = 1, Defs = [CmpFlag] in
+class CMPInstRR<bits<2> size, string sizename, RegisterClass regclass> 
   : AltairXInstCMPRR<OPCODE_CMP, size,
-  (outs CmpFlagReg64:$rd),
+  (outs),
   (ins regclass:$rs1, regclass:$rs2),
-  [(set CmpFlagReg64:$rd, (i64 (setccop regclass:$rs1, regclass:$rs2)))],
+  [(AltairXcmp regclass:$rs1, regclass:$rs2)],
   !strconcat("cmp.", sizename), "$rs1, $rs2"> {
 }
 
-class CMPInstRI<bits<2> size, string sizename, SDPatternOperator setccop, RegisterClass regclass, Operand immop, ImmLeaf immpat> 
+def CmpRRb : CMPInstRR<0, "b", GPIReg8>;
+def CmpRRw : CMPInstRR<1, "w", GPIReg16>;
+def CmpRRd : CMPInstRR<2, "d", GPIReg32>;
+def CmpRRq : CMPInstRR<3, "q", GPIReg64>;
+
+let isCompare = 1, Defs = [CmpFlag] in
+class CMPInstRI<bits<2> size, string sizename, RegisterClass regclass, Operand immop, ImmLeaf immpat> 
   : AltairXInstCMPRI<OPCODE_CMP, size,
-  (outs CmpFlagReg64:$rd),
+  (outs),
   (ins regclass:$rs1, immop:$imm),
-  [(set CmpFlagReg64:$rd, (i64 (setccop regclass:$rs1, immpat:$imm)))],
+  [(AltairXcmp regclass:$rs1, immpat:$imm)],
   !strconcat("cmp.", sizename), "$rs1, $imm"> {
 }
-
-multiclass CMPInstImpl<SDPatternOperator setccop> {
-  def RRb : CMPInstRR<0, "b", setccop, GPIReg8>;
-  def RRw : CMPInstRR<1, "w", setccop, GPIReg16>;
-  def RRd : CMPInstRR<2, "d", setccop, GPIReg32>;
-  def RRq : CMPInstRR<3, "q", setccop, GPIReg64>;
-
-  def RIb : CMPInstRI<0, "b", setccop, GPIReg8 , i8imm,  s8imm32>;
-  def RIw : CMPInstRI<1, "w", setccop, GPIReg16, i16imm, s16imm32>;
-  def RId : CMPInstRI<2, "d", setccop, GPIReg32, i32imm, s32imm32>;
-  def RIq : CMPInstRI<3, "q", setccop, GPIReg64, i64imm, s64imm32>;
-}
-
-defm CMPEQ  : CMPInstImpl<seteq>;
-defm CMPNE  : CMPInstImpl<setne>;
-defm CMPGT  : CMPInstImpl<setgt>;
-defm CMPGE  : CMPInstImpl<setge>;
-defm CMPLT  : CMPInstImpl<setlt>;
-defm CMPLE  : CMPInstImpl<setle>;
-defm CMPUGT : CMPInstImpl<setugt>;
-defm CMPUGE : CMPInstImpl<setuge>;
-defm CMPULT : CMPInstImpl<setult>;
-defm CMPULE : CMPInstImpl<setule>;
+def CmpRIb : CMPInstRI<0, "b", GPIReg8 , i8imm,  s8imm32>;
+def CmpRIw : CMPInstRI<1, "w", GPIReg16, i16imm, s16imm32>;
+def CmpRId : CMPInstRI<2, "d", GPIReg32, i32imm, s32imm32>;
+def CmpRIq : CMPInstRI<3, "q", GPIReg64, i64imm, s64imm32>;
 
 //===----------------------------------------------------------------------===//
-// Branch
+// Booleans and conditional move
+// These instructions return i8 because we support i8 natively in every instruction and booleans are i8
 //===----------------------------------------------------------------------===//
 
-def brtarget : Operand<OtherVT> {
-  let EncoderMethod = "getBRTargetOpValue";
-}
-def condcode : Operand<i32> {
-  let PrintMethod = "printCondCode";
-}
-
-// AltairXISD::BRCOND $bb, $cond, $cmpflag
-def SDT_AltairXbrcond : SDTypeProfile<0, 3, [SDTCisVT<0, OtherVT>, SDTCisVT<1, i32>, SDTCisVT<2, i64>]>;
-def AltairXbrcond : SDNode<"AltairXISD::BRCOND", SDT_AltairXbrcond, [SDNPHasChain]>;
-
-let Uses = [CmpFlag] in
-def B 
-  : AltairXInstBR<OPCODE_B, 
-    (outs), 
-    (ins brtarget:$target, condcode:$cond),
-    [(AltairXbrcond bb:$target, imm:$cond, CmpFlag)],
-    "b${cond}", "$target"> {
-
-  bits<4> cond;
-  let Inst{4-1} = cond;
+// Pattern that should match this instruction
+//  and(setne(i, 0), setne(j, 0)) -> sand(i, j)
+// Imm version are useless in practice
+// compiler will generate a simplier code that can be matched using se or sen
+class SANDInstRR<bits<2> size, string sizename, RegisterClass regclass> 
+  : AltairXInstALURR<OPCODE_SAND, size, // this technically returns a 1-bit int
+    (outs GPIReg8:$rd), 
+    (ins regclass:$rs1, regclass:$rs2),
+    [(set GPIReg8:$rd, (and (setne regclass:$rs1, 0), (setne regclass:$rs2, 0)))],
+    !strconcat("sand.", sizename), "$rd, $rs1, $rs2"> {
 }
 
-let isBarrier = 1 in
-def BRA : AltairXInstBR<OPCODE_BRA, 
-  (outs), 
-  (ins brtarget:$target),
-  [(br bb:$target)],
-  "bra", "$target">;
+def SAndRRb : SANDInstRR<0, "b", GPIReg8>;
+def SAndRRw : SANDInstRR<1, "w", GPIReg16>;
+def SAndRRd : SANDInstRR<2, "d", GPIReg32>;
+def SAndRRq : SANDInstRR<3, "q", GPIReg64>;
 
-// TODO: Implement analyzeBranch, reverseBranchCondition, removeBranch, insertBranch...
-// in InstrInfo to enable branch optimization
-
-//===----------------------------------------------------------------------===//
-// Conditional move and booleans
-//===----------------------------------------------------------------------===//
-
-def scmpcondcode : Operand<i32> {
-  let PrintMethod = "printSCMPCondCode";
+// SCMP supports natively 4 predicates
+// - Equal (se)
+// - Not equal (sen)
+// - Less than (lt, ltu)
+// - Greater than predicate can be matched by swapping the compared values: (a > b) -> (b < a)
+// Greater or equal, less than or equal, need an additional xor or setne, this is done during ISelLowering
+class SCMPInstRR<AltairXOpcode opcode, string name, bits<2> size, string sizename,
+  SDPatternOperator setccop, RegisterClass regclass>
+  : AltairXInstALURR<opcode, size,
+    (outs GPIReg8:$rd),
+    (ins regclass:$rs1, regclass:$rs2),
+    [(set GPIReg8:$rd, (setccop regclass:$rs1, regclass:$rs2))],
+    !strconcat(name, ".", sizename), "$rd, $rs1, $rs2"> {
 }
 
-// iX = AltairXISD::SCMP $rA, $rB, comp
-def SDT_AltairXscmp : SDTypeProfile<1, 3, [SDTCisInt<0>, SDTCisInt<1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i32>]>;
-def AltairXscmp : SDNode<"AltairXISD::SCMP", SDT_AltairXscmp, []>;
-
-class SCMPInst<bits<2> size, string sizename, RegisterClass outregclass, RegisterClass inregclass> 
-  : AltairXInstALURR<OPCODE_SCMP, size,
-    (outs outregclass:$rd), 
-    (ins inregclass:$rs1, inregclass:$rs2, scmpcondcode:$cond),
-    [(set outregclass:$rd, (AltairXscmp inregclass:$rs1, inregclass:$rs2, imm:$cond))],
-    !strconcat("s${cond}.", sizename), "$rd, $rs1, $rs2"> {
-
-  bits<4> cond;
-  let Inst{4-1} = cond;
+class SCMPInstRI<AltairXOpcode opcode, string name, bits<2> size, string sizename, 
+  SDPatternOperator setccop, RegisterClass regclass, Operand immop, ImmLeaf immpat>
+  : AltairXInstALURI<opcode, size,
+    (outs GPIReg8:$rd),
+    (ins regclass:$rs1, immop:$imm),
+    [(set GPIReg8:$rd, (setccop regclass:$rs1, immpat:$imm))],
+    !strconcat(name, ".", sizename), "$rd, $rs1, $imm"> {
 }
 
-multiclass SCMPInstImpl<RegisterClass outregclass> {
-  def b : SCMPInst<0, "b", outregclass, GPIReg8>;
-  def w : SCMPInst<1, "w", outregclass, GPIReg16>;
-  def d : SCMPInst<2, "d", outregclass, GPIReg32>;
-  def q : SCMPInst<3, "q", outregclass, GPIReg64>;
+multiclass SCMPInstImpl<AltairXOpcode opcode, string name, SDPatternOperator setccop> {
+  def RRb : SCMPInstRR<opcode, name, 0, "b", setccop, GPIReg8>;
+  def RRw : SCMPInstRR<opcode, name, 1, "w", setccop, GPIReg16>;
+  def RRd : SCMPInstRR<opcode, name, 2, "d", setccop, GPIReg32>;
+  def RRq : SCMPInstRR<opcode, name, 3, "q", setccop, GPIReg64>;
+  def RIb : SCMPInstRI<opcode, name, 0, "b", setccop, GPIReg8,  i8imm,  s8imm32>;
+  def RIw : SCMPInstRI<opcode, name, 1, "w", setccop, GPIReg16, i16imm, s16imm32>;
+  def RId : SCMPInstRI<opcode, name, 2, "d", setccop, GPIReg32, i32imm, s32imm32>;
+  def RIq : SCMPInstRI<opcode, name, 3, "q", setccop, GPIReg64, i64imm, s64imm32>;
 }
 
-defm SCMPi8 : SCMPInstImpl<GPIReg8>;
-defm SCMPi16 : SCMPInstImpl<GPIReg16>;
-defm SCMPi32 : SCMPInstImpl<GPIReg32>;
-defm SCMPi64 : SCMPInstImpl<GPIReg64>;
+defm Se : SCMPInstImpl<OPCODE_SE, "se", seteq>;
+defm Sen : SCMPInstImpl<OPCODE_SEN, "sen", setne>;
+defm Slts : SCMPInstImpl<OPCODE_SLTS, "slts", setlt>;
+defm Sltu : SCMPInstImpl<OPCODE_SLTU, "sltu", setult>;
 
-// i = AltairXISD::CMOVE tval, fval, bool
-def SDT_AltairXcmove : SDTypeProfile<1, 3, [SDTCisInt<0>, SDTCisInt<1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i64>]>;
+// iX = AltairXISD::SBIT $rA, $rB
+def SDT_AltairXsbit : SDTypeProfile<1, 2, [SDTCisInt<0>, SDTCisInt<1>, SDTCisSameAs<1, 2>]>;
+def AltairXsbit : SDNode<"AltairXISD::SBIT", SDT_AltairXsbit, []>;
+
+class SBITInstRR<bits<2> size, RegisterClass regclass> 
+  : AltairXInstALURR<OPCODE_SBIT, size,
+    (outs GPIReg8:$rd),
+    (ins regclass:$rs1, regclass:$rs2),
+    [(set GPIReg8:$rd, (AltairXsbit regclass:$rs1, regclass:$rs2))],
+    "sbit", "$rd, $rs1, $rs2"> {
+}
+
+class SBITInstRI<bits<2> size, RegisterClass regclass, Operand immop, ImmLeaf immpat> 
+  : AltairXInstALURI<OPCODE_SBIT, size,
+    (outs GPIReg8:$rd),
+    (ins regclass:$rs1, immop:$imm),
+    [(set GPIReg8:$rd, (AltairXsbit regclass:$rs1, immpat:$imm))],
+    "sbit", "$rd, $rs1, $imm"> {
+}
+
+def SBitRRb : SBITInstRR<0, GPIReg8>;
+def SBitRRw : SBITInstRR<1, GPIReg16>;
+def SBitRRd : SBITInstRR<2, GPIReg32>;
+def SBitRRq : SBITInstRR<3, GPIReg64>;
+def SBitRIb : SBITInstRI<0, GPIReg8,  i8imm,  s8imm32>;
+def SBitRIw : SBITInstRI<1, GPIReg16, i16imm, s16imm32>;
+def SBitRId : SBITInstRI<2, GPIReg32, i32imm, s32imm32>;
+def SBitRIq : SBITInstRI<3, GPIReg64, i64imm, s64imm32>;
+
+// iX = AltairXISD::CMOVE tval, fval, bool
+def SDT_AltairXcmove : SDTypeProfile<1, 3, [SDTCisInt<0>, SDTCisInt<1>, SDTCisSameAs<1, 3>, SDTCisVT<2, i8>]>;
 def AltairXcmove : SDNode<"AltairXISD::CMOVE", SDT_AltairXcmove, []>;
 
 // CMOVE, first parameter is also the output
 let Constraints = "$out = $rd" in
-class CMOVEInst<bits<2> size, string sizename, RegisterClass regclass> 
+class CMoveRRInst<bits<2> size, string sizename, RegisterClass regclass> 
   : AltairXInstALURR<OPCODE_CMOVE, size,
     (outs regclass:$out),
-    (ins regclass:$rd, regclass:$rs1, GPIReg64:$rs2),
-    [(set regclass:$out, (AltairXcmove regclass:$rd, regclass:$rs1, GPIReg64:$rs2))],
+    (ins regclass:$rd, GPIReg8:$rs1, regclass:$rs2),
+    [(set regclass:$out, (AltairXcmove regclass:$rd, GPIReg8:$rs1, regclass:$rs2))],
     !strconcat("cmove.", sizename), "$rd, $rs1, $rs2"> {
 }
 
-def CMOVEb : CMOVEInst<0, "b", GPIReg8>;
-def CMOVEw : CMOVEInst<1, "w", GPIReg16>;
-def CMOVEd : CMOVEInst<2, "d", GPIReg32>;
-def CMOVEq : CMOVEInst<3, "q", GPIReg64>;
+let Constraints = "$out = $rd" in
+class CMoveRIInst<bits<2> size, string sizename, RegisterClass regclass, Operand immop, ImmLeaf immpat> 
+  : AltairXInstALURI<OPCODE_CMOVE, size,
+    (outs regclass:$out),
+    (ins regclass:$rd, GPIReg8:$rs1, immop:$imm),
+    [(set regclass:$out, (AltairXcmove regclass:$rd, GPIReg8:$rs1, immpat:$imm))],
+    !strconcat("cmove.", sizename), "$rd, $rs1, $imm"> {
+}
+
+def CMoveRRb : CMoveRRInst<0, "b", GPIReg8>;
+def CMoveRRw : CMoveRRInst<1, "w", GPIReg16>;
+def CMoveRRd : CMoveRRInst<2, "d", GPIReg32>;
+def CMoveRRq : CMoveRRInst<3, "q", GPIReg64>;
+
+def CMoveRIb : CMoveRIInst<0, "b", GPIReg8,  i8imm,  s8imm32>;
+def CMoveRIw : CMoveRIInst<1, "w", GPIReg16, i16imm, s16imm32>;
+def CMoveRId : CMoveRIInst<2, "d", GPIReg32, i32imm, s32imm32>;
+def CMoveRIq : CMoveRIInst<3, "q", GPIReg64, i64imm, s64imm32>;
