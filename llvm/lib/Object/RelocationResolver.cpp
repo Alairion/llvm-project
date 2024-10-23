@@ -762,17 +762,25 @@ static bool supportsAltairX(uint64_t Type) {
   switch (Type) {
   case ELF::R_ALTAIRX_NONE:
     return true;
-  case ELF::R_ALTAIRX_PCRELBR23:
+  case ELF::R_ALTAIRX_PCREL24LO:
     return true;
-  case ELF::R_ALTAIRX_CALL24:
+  case ELF::R_ALTAIRX_PCREL24HI:
+    return true;
+  case ELF::R_ALTAIRX_ABS24LO:
+    return true;
+  case ELF::R_ALTAIRX_ABS24HI:
     return true;
   case ELF::R_ALTAIRX_MOVEIX9LO:
     return true;
-  case ELF::R_ALTAIRX_MOVEIX9HI24:
+  case ELF::R_ALTAIRX_MOVEIX9HI:
     return true;
   case ELF::R_ALTAIRX_MOVEIX10LO:
     return true;
-  case ELF::R_ALTAIRX_MOVEIX10HI24:
+  case ELF::R_ALTAIRX_MOVEIX10HI:
+    return true;
+  case ELF::R_ALTAIRX_MOVEIX18LO:
+    return true;
+  case ELF::R_ALTAIRX_MOVEIX18HI:
     return true;
   default:
     return false;
@@ -784,17 +792,20 @@ static uint64_t resolveAltairX(uint64_t Type, uint64_t Offset, uint64_t S,
   switch(Type) {
   case ELF::R_ALTAIRX_NONE:
     return LocData;
-  case ELF::R_ALTAIRX_CALL24:
-    return S + Addend;
-  case ELF::R_ALTAIRX_PCRELBR23:
+  case ELF::R_ALTAIRX_PCREL24LO: [[fallthrough]];
+  case ELF::R_ALTAIRX_PCREL24HI:
     return S + Addend - Offset;
-  case ELF::R_ALTAIRX_MOVEIX9LO:
+  case ELF::R_ALTAIRX_ABS24LO: [[fallthrough]];
+  case ELF::R_ALTAIRX_ABS24HI:
     return S + Addend;
-  case ELF::R_ALTAIRX_MOVEIX9HI24:
+  case ELF::R_ALTAIRX_MOVEIX9LO: [[fallthrough]];
+  case ELF::R_ALTAIRX_MOVEIX9HI:
     return S + Addend;
-  case ELF::R_ALTAIRX_MOVEIX10LO:
+  case ELF::R_ALTAIRX_MOVEIX10LO: [[fallthrough]];
+  case ELF::R_ALTAIRX_MOVEIX10HI:
     return S + Addend;
-  case ELF::R_ALTAIRX_MOVEIX10HI24:
+  case ELF::R_ALTAIRX_MOVEIX18LO: [[fallthrough]];
+  case ELF::R_ALTAIRX_MOVEIX18HI:
     return S + Addend;
   default:
     llvm_unreachable("Invalid relocation type");

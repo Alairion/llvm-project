@@ -28,20 +28,27 @@ std::uint32_t AltairXELFObjectWriter::getRelocType(MCContext &Ctx,
     return kind - FirstLiteralRelocationKind;
   }
 
-  switch(kind)
-  {
-  case AltairX::fixup_altairx_pcrel_br_imm23:
-    return ELF::R_ALTAIRX_PCRELBR23;
-  case AltairX::fixup_altairx_call_imm24:
-    return ELF::R_ALTAIRX_CALL24;
+  switch(kind) {
+  case AltairX::fixup_altairx_pcrel24lo:
+    return ELF::R_ALTAIRX_PCREL24LO;
+  case AltairX::fixup_altairx_pcrel24hi:
+    return ELF::R_ALTAIRX_PCREL24HI;
+  case AltairX::fixup_altairx_abs24lo:
+    return ELF::R_ALTAIRX_ABS24LO;
+  case AltairX::fixup_altairx_abs24hi:
+    return ELF::R_ALTAIRX_ABS24HI;
   case AltairX::fixup_altairx_moveix9lo:
     return ELF::R_ALTAIRX_MOVEIX9LO;
-  case AltairX::fixup_altairx_moveix9hi24:
-    return ELF::R_ALTAIRX_MOVEIX9HI24;
+  case AltairX::fixup_altairx_moveix9hi:
+    return ELF::R_ALTAIRX_MOVEIX9HI;
   case AltairX::fixup_altairx_moveix10lo:
     return ELF::R_ALTAIRX_MOVEIX10LO;
-  case AltairX::fixup_altairx_moveix10hi24:
-    return ELF::R_ALTAIRX_MOVEIX10HI24;
+  case AltairX::fixup_altairx_moveix10hi:
+    return ELF::R_ALTAIRX_MOVEIX10HI;
+  case AltairX::fixup_altairx_moveix18lo:
+    return ELF::R_ALTAIRX_MOVEIX18LO;
+  case AltairX::fixup_altairx_moveix18hi:
+    return ELF::R_ALTAIRX_MOVEIX18HI;
   default:
     return ELF::R_ALTAIRX_NONE;
   }

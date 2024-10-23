@@ -55,8 +55,8 @@ void AltairXFrameLowering::emitPrologue(MachineFunction &MF,
 
   const AltairXInstrInfo& TII = *STI.getInstrInfo();
   const AltairXRegisterInfo& TRI = *STI.getRegisterInfo();
-  MachineModuleInfo& MMI = MF.getMMI();
-  const MCRegisterInfo* MRI = MMI.getContext().getRegisterInfo();
+  //MachineModuleInfo& MMI = MF.getMMI();
+  //const MCRegisterInfo* MRI = MMI.getContext().getRegisterInfo();
   auto MBBI = MBB.begin();
   DebugLoc DL{};
 
@@ -143,9 +143,6 @@ void AltairXFrameLowering::emitEpilogue(MachineFunction &MF,
     auto it = MBBI;
     const auto& CSI = MFI.getCalleeSavedInfo();
     std::advance(it, -static_cast<std::ptrdiff_t>(CSI.size()));
-    //for (std::size_t i{}; i < CSI.size(); ++i) {
-    //  --I;
-    //}
 
     // Insert instruction "move sp, fp" at this location.    
     BuildMI(MBB, it, DL, TII.get(AltairX::AddRIq), stackReg)

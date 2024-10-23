@@ -30,15 +30,17 @@ using namespace llvm;
 namespace llvm {
 class AltairXAsmPrinter : public AsmPrinter {
 public:
-  explicit AltairXAsmPrinter(TargetMachine &TM,
-                             std::unique_ptr<MCStreamer> Streamer)
+  AltairXAsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
       : AsmPrinter(TM, std::move(Streamer)) {}
 
   virtual StringRef getPassName() const override {
     return "AltairX Assembly Printer";
   }
 
-  void emitInstruction(const MachineInstr *MI) override;
+  virtual void SetupMachineFunction(MachineFunction &MF) override {
+    AsmPrinter::SetupMachineFunction(MF);
+    Subtarget = &MF.getSubtarget<AltairXSubtarget>();
+  }
 
   // This function must be present as it is internally used by the
   // auto-generated function emitPseudoExpansionLowering to expand pseudo
@@ -48,10 +50,15 @@ public:
   bool emitPseudoExpansionLowering(MCStreamer &OutStreamer,
                                    const MachineInstr *MI);
 
+  // Emit a bundle or a single instruction to associated streamer
+  void emitInstruction(const MachineInstr* MI) override;
+
 private:
   void LowerInstruction(const MachineInstr *MI, MCInst &OutMI) const;
   MCOperand LowerOperand(const MachineOperand &MO) const;
   MCOperand LowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym) const;
+
+  const AltairXSubtarget *Subtarget{};
 };
 } // namespace llvm
 
@@ -68,9 +75,33 @@ void AltairXAsmPrinter::emitInstruction(const MachineInstr *MI) {
     return;
   }
 
-  MCInst TmpInst;
-  LowerInstruction(MI, TmpInst);
-  EmitToStreamer(*OutStreamer, TmpInst);
+  if (MI->isBundle()) {
+    const MachineBasicBlock* MBB = MI->getParent();
+
+    // temporary bundle, will be dropper after being emitted by OutStreamer
+    MCInst bundle;
+    bundle.setOpcode(AltairX::BUNDLE);
+    std::array<MCInst, 2> content; // buffer for bundle instructions (max 2)
+    auto nextContent = content.begin(); // used to fill content and bound-check
+
+    for (auto MII = std::next(MI->getIterator()); // start at first BUNDLE MI
+         MII->isInsideBundle() && MII != MBB->instr_end(); ++MII) {
+      if (!MII->isDebugInstr() && !MII->isImplicitDef()) {
+        assert(nextContent != content.end() &&
+               "Bundle constains more than 2 instructions!");
+
+        LowerInstruction(to_address(MII), *nextContent);
+        bundle.addOperand(MCOperand::createInst(to_address(nextContent)));
+        ++nextContent;
+      }
+    }
+
+    EmitToStreamer(*OutStreamer, bundle);
+  } else {
+    MCInst TmpInst;
+    LowerInstruction(MI, TmpInst);
+    EmitToStreamer(*OutStreamer, TmpInst);
+  }
 }
 
 void AltairXAsmPrinter::LowerInstruction(const MachineInstr *MI,
@@ -79,7 +110,7 @@ void AltairXAsmPrinter::LowerInstruction(const MachineInstr *MI,
 
   for (const MachineOperand &MO : MI->operands()) {
     MCOperand MCOp = LowerOperand(MO);
-    if(MCOp.isValid()) {
+    if (MCOp.isValid()) {
       OutMI.addOperand(MCOp);
     }
   }
@@ -93,30 +124,22 @@ MCOperand AltairXAsmPrinter::LowerOperand(const MachineOperand &MO) const {
       break;
     }
     return MCOperand::createReg(MO.getReg());
-
   case MachineOperand::MO_Immediate:
     return MCOperand::createImm(MO.getImm());
-
   case MachineOperand::MO_MachineBasicBlock:
     return LowerSymbolOperand(MO, MO.getMBB()->getSymbol());
-
   case MachineOperand::MO_GlobalAddress:
     return LowerSymbolOperand(MO, getSymbol(MO.getGlobal()));
-
   case MachineOperand::MO_BlockAddress:
     return LowerSymbolOperand(MO, GetBlockAddressSymbol(MO.getBlockAddress()));
-
   case MachineOperand::MO_ExternalSymbol:
     return LowerSymbolOperand(MO, GetExternalSymbolSymbol(MO.getSymbolName()));
-
   case MachineOperand::MO_ConstantPoolIndex:
     return LowerSymbolOperand(MO, GetCPISymbol(MO.getIndex()));
-
   case MachineOperand::MO_RegisterMask:
     break;
-
   default:
-    report_fatal_error("unknown operand type");
+    llvm_unreachable("unknown operand type");
   }
 
   return MCOperand();
@@ -132,6 +155,7 @@ MCOperand AltairXAsmPrinter::LowerSymbolOperand(const MachineOperand &MO,
   if (!MO.isJTI() && !MO.isMBB() && MO.getOffset()) {
     Expr = MCBinaryExpr::createAdd(
         Expr, MCConstantExpr::create(MO.getOffset(), Ctx), Ctx);
+    llvm_unreachable("LowerSymbolOperand is not supported yet");
   }
 
   return MCOperand::createExpr(Expr);

@@ -8,18 +8,36 @@
 
 //===----------------------------------------------------------------------===//
 // Functional units of the AltairX
+// ID	   UNIT NAME	ISSUE
+// /	INST 1	INST 2	/
+// 0	ALU1	ALU2	ALU(0)
+// 1	ALU1	ALU2	ALU(1)
+// 2	LSU1	LSU2	LSU(2)
+// 3	FPU1	FPU2	FPU(8,9,10)
+// 4	/	    /		/
+// 5	EFU	    CU		EFU(5)
+// 6	MDU	    VU		MDU(6)
+// 7	BRU	    /		BRU(7)
 //===----------------------------------------------------------------------===//
-def ALU1  : FuncUnit;
-//def ALU2  : FuncUnit;
-//def LSU1  : FuncUnit;
-//def LSU2  : FuncUnit;
-//def FPU1  : FuncUnit;
-//def FPU2  : FuncUnit;
-//def DFPU1 : FuncUnit;
-//def DFPU2 : FuncUnit;
-//def EFU   : FuncUnit;
-//def MDU   : FuncUnit;
-//def BRU   : FuncUnit;
+def ALU1 : FuncUnit;
+def ALU2 : FuncUnit;
+def LSU1 : FuncUnit;
+def LSU2 : FuncUnit;
+def FPU1 : FuncUnit;
+def FPU2 : FuncUnit;
+def EFU  : FuncUnit;
+def MDU  : FuncUnit;
+def BRU  : FuncUnit;
+def CU   : FuncUnit;
+def VU   : FuncUnit;
+
+def ACC : Bypass;
+def BA1 : Bypass;
+def BA2 : Bypass;
+def BF1 : Bypass;
+def BF2 : Bypass;
+def BL1 : Bypass;
+def BL2 : Bypass;
 
 //===----------------------------------------------------------------------===//
 // Instruction Itinerary classes used for Cpu0
