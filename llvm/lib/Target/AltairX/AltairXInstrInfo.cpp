@@ -318,7 +318,6 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
                                      MachineBasicBlock *&FBB,
                                      SmallVectorImpl<MachineOperand> &Cond,
                                      bool AllowModify) const {
-  return true; // Can't handle indirect branch.
   auto last = MBB.getLastNonDebugInstr();
   if (last == MBB.end()) {
     return false;
