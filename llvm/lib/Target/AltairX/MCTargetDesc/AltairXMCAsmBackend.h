@@ -24,25 +24,42 @@ class MCRegisterInfo;
 class MCTargetOptions;
 
 namespace AltairX {
-  enum Fixups {
-    // 23-bits pc-relative branch (bx, loop) 
-    fixup_altairx_pcrel_br_imm23 = FirstTargetFixupKind,
-    // 24-bits fixup for absolute jumps (call, jump, ...)
-    fixup_altairx_call_imm24,
-    // 33-bits (sign-extended) fixup for low 9-bits. Next instruction must be a moveix.
-    fixup_altairx_moveix9lo,
-    // fixup for moveix high 24-bits.
-    fixup_altairx_moveix9hi24,
-    // 34-bits (sign-extended) fixup for low 10-bits. Next instruction must be a moveix.
-    fixup_altairx_moveix10lo,
-    // fixup for moveix high 24-bits.
-    fixup_altairx_moveix10hi24,
+enum Fixups {
+  // 24-bits pc-relative branch (bx, loop)
+  fixup_altairx_pcrel24lo = FirstTargetFixupKind,
+  fixup_altairx_pcrel24hi,
+  // 24-bits fixup for absolute jumps (call, jump, ...)
+  fixup_altairx_abs24lo,
+  fixup_altairx_abs24hi,
 
-    // Marker
-    LastTargetFixupKind,
-    NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind
-  };
-} // end namespace AArch64
+  // MoveIX fixups:
+  // These fixups are in two parts, the low N-bits part that goes in the main
+  // instruction, and the high 24-bits that goes in moveix.
+  // If the imm value is sign-extended, the sign-bit must be place in the main
+  // instruction immediate and the moveix value inverted.
+  // With for exemple, sign-extended N-bits long imm will be handled like this:
+  //   tmp = sext iN imm to i64
+  //   tmp[N - 1; N + 22] ^= imm24 from moveix
+  // Example: "add a, b, 0xF00FF0FF; moveix" (imm is -267390721)
+  // add will carry a 9bits imm, with the sign (bit 31) + 8 bits:
+  // 0xF00FF0FF -> 0x1FF
+  // moveix will carry the remaining 24-bits, inverted:
+  // 0xF00FF0FF -> ~(0xF00FF0FF >> 8) -> 0x0FF00F
+  // At runtime the processor will do the following:
+  //   tmp = sext i9 (0x1FF) to i64 = 0xFFFF'FFFF'FFFF'FFFF
+  //   tmp[8; 30] ^= 0x0FF00F -> FFFF'FFFF'F00F'F0FF
+  fixup_altairx_moveix9lo, // most ALU/MDU instructions
+  fixup_altairx_moveix9hi,
+  fixup_altairx_moveix10lo, // LSU instructions
+  fixup_altairx_moveix10hi,
+  fixup_altairx_moveix18lo, // MoveI
+  fixup_altairx_moveix18hi,
+
+  // Marker
+  LastTargetFixupKind,
+  NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind
+};
+} // namespace AltairX
 
 class AltairXMCAsmBackend : public MCAsmBackend {
 public:
@@ -55,7 +72,7 @@ public:
 
   std::unique_ptr<MCObjectTargetWriter>
   createObjectTargetWriter() const override;
-  bool writeNopData(raw_ostream &OS, uint64_t Count,
+  bool writeNopData(raw_ostream &OS, std::uint64_t Count,
                     const MCSubtargetInfo *STI) const override;
 
   // Target Fixup Interfaces
@@ -63,9 +80,14 @@ public:
   std::optional<MCFixupKind> getFixupKind(StringRef Name) const override;
   const MCFixupKindInfo& getFixupKindInfo(MCFixupKind Kind) const override;
 
+  // generate the right imm for instruction according to "kind"
+  static std::uint64_t adjustImmValue(MCFixupKind kind,
+                                      std::uint64_t Value) noexcept;
+
+
   void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                   const MCValue &Target, MutableArrayRef<char> Data,
-                  uint64_t Value, bool IsResolved,
+                  std::uint64_t Value, bool IsResolved,
                   const MCSubtargetInfo *STI) const override;
 
   // Target Relaxation Interfaces
