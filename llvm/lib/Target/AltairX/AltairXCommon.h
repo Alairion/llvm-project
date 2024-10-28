@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#include "llvm/Support/ErrorHandling.h"
+
 namespace llvm::AltairX {
 
 enum class CondCode : std::uint32_t {
@@ -17,6 +19,33 @@ enum class CondCode : std::uint32_t {
   GS = 0b0001, // Greater (signed)
   GES = 0b1001 // Greater or equal (signed)
 };
+
+inline CondCode reverseCondCode(CondCode cc) noexcept {
+  switch (cc) {
+  case CondCode::NE:
+    return CondCode::EQ;
+  case CondCode::EQ:
+    return CondCode::NE;
+  case CondCode::L:
+    return CondCode::GE;
+  case CondCode::LE:
+    return CondCode::G;
+  case CondCode::G:
+    return CondCode::LE;
+  case CondCode::GE:
+    return CondCode::L;
+  case CondCode::LS:
+    return CondCode::GES;
+  case CondCode::LES:
+    return CondCode::GS;
+  case CondCode::GS:
+    return CondCode::LES;
+  case CondCode::GES:
+    return CondCode::LS;
+  default:
+    llvm_unreachable("Unknown codecode");
+  }
+}
 
 enum class SCMPCondCode : std::uint32_t {
   EQ = 0b0001, // Equal
