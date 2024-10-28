@@ -22,6 +22,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 
+#include "AltairXCommon.h"
 #include "AltairXMachineFunction.h"
 #include "AltairXRegisterInfo.h"
 #include "AltairXTargetMachine.h"
@@ -404,6 +405,18 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   }
 
   return true;
+}
+
+bool AltairXInstrInfo::reverseBranchCondition(
+    SmallVectorImpl<MachineOperand> &Cond) const {
+  assert(Cond.size() == 1 &&
+         "Expect a single condition code from analyseBranch!");
+
+  const auto cc = AltairX::reverseCondCode(
+      static_cast<AltairX::CondCode>(Cond[0].getImm()));
+
+  Cond[0].setImm(static_cast<int64_t>(cc));
+  return false;
 }
 
 unsigned AltairXInstrInfo::removeBranch(MachineBasicBlock &MBB,
