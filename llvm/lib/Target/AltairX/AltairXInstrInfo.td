@@ -61,7 +61,6 @@ defm "" : SizedUImm<18>;
 // Addressing mode
 def addr : ComplexPattern<iPTR, 3, "selectAddr", [], []>;
 def addrimm : ComplexPattern<iPTR, 2, "selectAddrImm", [add, frameindex], []>;
-def addrimmsp : ComplexPattern<iPTR, 2, "selectAddrImmSP", [add], []>;
 
 def SDT_AltairXGAWRAPPER : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
 def AltairXGAWRAPPER : SDNode<"AltairXISD::GAWRAPPER", SDT_AltairXGAWRAPPER, []>;
@@ -599,57 +598,22 @@ def LoadRIwAX32 : LoadRIInst<GPIReg32, extloadi16_i32, 1, "w">;
 def LoadRIwAX64 : LoadRIInst<GPIReg64, extloadi16_i64, 1, "w">;
 def LoadRIdAX64 : LoadRIInst<GPIReg64, extloadi32_i64, 2, "d">;
 
-// Load SP + Imm
-let canFoldAsLoad = 1, isReMaterializable = 1, hasSideEffects = 0, mayLoad = 1 in
-class LoadSPInst<RegisterClass regclass, SDPatternOperator opnode, bits<2> size, string sizename> 
-  : AltairXInstLSUSP<OPCODE_LDS, size,
-  (outs regclass:$reg),
-  (ins SPReg64:$base, i64imm:$offset),
-  [(set regclass:$reg, (opnode (addrimmsp SPReg64:$base, i64imm:$offset)))],
-  !strconcat("lds.", sizename), "$reg, $offset[$base]"> {
-}
-
-// basic loads for each size (SP version)
-def LoadSPb : LoadSPInst<GPIReg8,  load, 0, "b">;
-def LoadSPw : LoadSPInst<GPIReg16, load, 1, "w">;
-def LoadSPd : LoadSPInst<GPIReg32, load, 2, "d">;
-def LoadSPq : LoadSPInst<GPIReg64, load, 3, "q">;
-
-// zextload: use instruction to ensure no additional operations are generated  (SP version)
-def LoadSPbZX16 : LoadSPInst<GPIReg16, zextloadi8_i16, 0, "b">;
-def LoadSPbZX32 : LoadSPInst<GPIReg32, zextloadi8_i32, 0, "b">;
-def LoadSPbZX64 : LoadSPInst<GPIReg64, zextloadi8_i64, 0, "b">;
-def LoadSPwZX32 : LoadSPInst<GPIReg32, zextloadi16_i32, 1, "w">;
-def LoadSPwZX64 : LoadSPInst<GPIReg64, zextloadi16_i64, 1, "w">;
-def LoadSPdZX64 : LoadSPInst<GPIReg64, zextloadi32_i64, 2, "d">;
-
-// zextload: use instruction to ensure no additional operations are generated  (SP version)
-def LoadSPbAX16 : LoadSPInst<GPIReg16, extloadi8_i16, 0, "b">;
-def LoadSPbAX32 : LoadSPInst<GPIReg32, extloadi8_i32, 0, "b">;
-def LoadSPbAX64 : LoadSPInst<GPIReg64, extloadi8_i64, 0, "b">;
-def LoadSPwAX32 : LoadSPInst<GPIReg32, extloadi16_i32, 1, "w">;
-def LoadSPwAX64 : LoadSPInst<GPIReg64, extloadi16_i64, 1, "w">;
-def LoadSPdAX64 : LoadSPInst<GPIReg64, extloadi32_i64, 2, "d">;
-
 // sextload: actually perform a sext
-multiclass SExtLoadPat<PatFrag loadpat, SExt sextinst, LoadRRInst loadrrinst, LoadRIInst loadriinst, LoadSPInst loadspinst> {
+multiclass SExtLoadPat<PatFrag loadpat, SExt sextinst, LoadRRInst loadrrinst, LoadRIInst loadriinst> {
   // reg-reg version
   def : Pat<(loadpat (addr GPIReg64:$base, GPIReg64:$offset, u64imm3:$shift)),
     (sextinst (loadrrinst GPIReg64:$base, GPIReg64:$offset, u64imm3:$shift))>;
   // reg-imm version
   def : Pat<(loadpat (addrimm GPIReg64:$base, i64imm:$offset)),
     (sextinst (loadriinst GPIReg64:$base, i64imm:$offset))>;
-  // reg-imm stack pointer version
-  def : Pat<(loadpat (addrimmsp GPIReg64:$base, i64imm:$offset)),
-    (sextinst (loadspinst GPIReg64:$base, i64imm:$offset))>;
 }
 
-defm : SExtLoadPat<sextloadi8_i16, SExt8to16, LoadRRb, LoadRIb, LoadSPb>;
-defm : SExtLoadPat<sextloadi8_i32, SExt8to32, LoadRRb, LoadRIb, LoadSPb>;
-defm : SExtLoadPat<sextloadi8_i64, SExt8to64, LoadRRb, LoadRIb, LoadSPb>;
-defm : SExtLoadPat<sextloadi16_i32, SExt16to32, LoadRRw, LoadRIw, LoadSPw>;
-defm : SExtLoadPat<sextloadi16_i64, SExt16to64, LoadRRw, LoadRIw, LoadSPw>;
-defm : SExtLoadPat<sextloadi32_i64, SExt32to64, LoadRRd, LoadRId, LoadSPd>;
+defm : SExtLoadPat<sextloadi8_i16,  SExt8to16,  LoadRRb, LoadRIb>;
+defm : SExtLoadPat<sextloadi8_i32,  SExt8to32,  LoadRRb, LoadRIb>;
+defm : SExtLoadPat<sextloadi8_i64,  SExt8to64,  LoadRRb, LoadRIb>;
+defm : SExtLoadPat<sextloadi16_i32, SExt16to32, LoadRRw, LoadRIw>;
+defm : SExtLoadPat<sextloadi16_i64, SExt16to64, LoadRRw, LoadRIw>;
+defm : SExtLoadPat<sextloadi32_i64, SExt32to64, LoadRRd, LoadRId>;
 
 //===----------------------------------------------------------------------===//
 // Store
@@ -665,13 +629,13 @@ class StoreRRInst<RegisterClass regclass, SDPatternOperator opnode, bits<2> size
   !strconcat("st.", sizename), "$reg, $base[$offset << $shift]"> {
 }
 
-// basic store for each size (imm version)
+// basic store for each size
 def StoreRRb : StoreRRInst<GPIReg8,  store, 0, "b">;
 def StoreRRw : StoreRRInst<GPIReg16, store, 1, "w">;
 def StoreRRd : StoreRRInst<GPIReg32, store, 2, "d">;
 def StoreRRq : StoreRRInst<GPIReg64, store, 3, "q">;
 
-// truncstore (imm version)
+// truncstore
 def StoreRRbT16 : StoreRRInst<GPIReg16, truncstorei8, 0, "b">;
 def StoreRRbT32 : StoreRRInst<GPIReg32, truncstorei8, 0, "b">;
 def StoreRRbT64 : StoreRRInst<GPIReg64, truncstorei8, 0, "b">;
@@ -689,43 +653,19 @@ class StoreRIInst<RegisterClass regclass, SDPatternOperator opnode, bits<2> size
   !strconcat("st.", sizename), "$reg, $offset[$base]"> {
 }
 
-// basic store for each size
+// basic store for each size (imm version)
 def StoreRIb : StoreRIInst<GPIReg8,  store, 0, "b">;
 def StoreRIw : StoreRIInst<GPIReg16, store, 1, "w">;
 def StoreRId : StoreRIInst<GPIReg32, store, 2, "d">;
 def StoreRIq : StoreRIInst<GPIReg64, store, 3, "q">;
 
-// truncstore
+// truncstore (imm version)
 def StoreRIbT16 : StoreRIInst<GPIReg16, truncstorei8, 0, "b">;
 def StoreRIbT32 : StoreRIInst<GPIReg32, truncstorei8, 0, "b">;
 def StoreRIbT64 : StoreRIInst<GPIReg64, truncstorei8, 0, "b">;
 def StoreRIwT32 : StoreRIInst<GPIReg32, truncstorei16, 1, "w">;
 def StoreRIwT64 : StoreRIInst<GPIReg64, truncstorei16, 1, "w">;
 def StoreRIdT64 : StoreRIInst<GPIReg64, truncstorei32, 2, "d">;
-
-// Store SP + Imm
-let isReMaterializable = 1, hasSideEffects = 0, mayStore = 1 in
-class StoreSPInst<RegisterClass regclass, SDPatternOperator opnode, bits<2> size, string sizename> 
-  : AltairXInstLSUSP<OPCODE_STS, size, 
-  (outs),
-  (ins regclass:$reg, SPReg64:$base, i64imm:$offset),
-  [(opnode regclass:$reg, (addrimmsp SPReg64:$base, i64imm:$offset))],
-  !strconcat("sts.", sizename), "$reg, $offset[$base]"> {
-}
-
-// basic store for each size
-def StoreSPb : StoreSPInst<GPIReg8,  store, 0, "b">;
-def StoreSPw : StoreSPInst<GPIReg16, store, 1, "w">;
-def StoreSPd : StoreSPInst<GPIReg32, store, 2, "d">;
-def StoreSPq : StoreSPInst<GPIReg64, store, 3, "q">;
-
-// truncstore
-def StoreSPbT16 : StoreSPInst<GPIReg16, truncstorei8, 0, "b">;
-def StoreSPbT32 : StoreSPInst<GPIReg32, truncstorei8, 0, "b">;
-def StoreSPbT64 : StoreSPInst<GPIReg64, truncstorei8, 0, "b">;
-def StoreSPwT32 : StoreSPInst<GPIReg32, truncstorei16, 1, "w">;
-def StoreSPwT64 : StoreSPInst<GPIReg64, truncstorei16, 1, "w">;
-def StoreSPdT64 : StoreSPInst<GPIReg64, truncstorei32, 2, "d">;
 
 //===----------------------------------------------------------------------===//
 // Spill/reload helpers

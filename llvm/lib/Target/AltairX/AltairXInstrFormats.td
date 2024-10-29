@@ -97,10 +97,6 @@ def OPCODE_LDI  : AltairXOpcodeLSU<0b0010>;
 def OPCODE_STI  : AltairXOpcodeLSU<0b1010>;
 def OPCODE_LDVI : AltairXOpcodeLSU<0b0110>;
 def OPCODE_STVI : AltairXOpcodeLSU<0b1110>;
-def OPCODE_LDS  : AltairXOpcodeLSU<0b0001>;
-def OPCODE_STS  : AltairXOpcodeLSU<0b1001>;
-def OPCODE_LDVS : AltairXOpcodeLSU<0b0101>;
-def OPCODE_STVS : AltairXOpcodeLSU<0b1101>;
 
 class AltairXOpcodeMDU<bits<4> val>
   : AltairXOpcode {

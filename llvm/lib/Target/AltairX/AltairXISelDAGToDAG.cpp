@@ -150,36 +150,7 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
     }
   }
 
-  return false; // may be matched by selectAddrImmSP
-}
-
-bool AltairXDAGToDAGISel::selectAddrImmSP(SDValue N, SDValue &Base,
-                                          SDValue &Offset) const {
-  if (Base.getResNo() != AltairX::SPReg64) {
-    return false;
-  }
-
-  SDLoc DL{N};
-
-  // Load at given address directly
-  if(N.getOpcode() != ISD::ADD) {
-    Base = N;
-    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
-    return true;
-  }
-
-  auto left = N.getOperand(0);
-  auto right = N.getOperand(1);
-  if(auto* value = dyn_cast<ConstantSDNode>(right); value) {
-    const auto constval = value->getSExtValue();
-    if(isUInt<16>(constval)) {
-      Base = left;
-      Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
-      return true;
-    }
-  }
-
-  return false; // may be matched selectAddrImm
+  return false;
 }
 
 void AltairXDAGToDAGISel::Select(SDNode *Node) {
