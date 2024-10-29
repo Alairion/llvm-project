@@ -98,29 +98,6 @@ std::uint32_t getSpillStoreRI(std::uint32_t opcode) {
   }
 }
 
-std::uint32_t getSpillStoreSP(std::uint32_t opcode) {
-  switch (opcode) {
-  case AltairX::SPILLb:
-    return AltairX::StoreSPb;
-  case AltairX::SPILLw:
-    return AltairX::StoreSPw;
-  case AltairX::SPILLd:
-    return AltairX::StoreSPd;
-  case AltairX::SPILLq:
-    return AltairX::StoreSPq;
-  case AltairX::StoreRIb: // StoreRI may be morphed into StoreSP
-    return AltairX::StoreSPb;
-  case AltairX::StoreRIw:
-    return AltairX::StoreSPw;
-  case AltairX::StoreRId:
-    return AltairX::StoreSPd;
-  case AltairX::StoreRIq:
-    return AltairX::StoreSPq;
-  default:
-    llvm_unreachable("Invalid spill instruction");
-  }
-}
-
 std::uint32_t getReloadLoadRI(std::uint32_t opcode) {
   switch (opcode) {
   case AltairX::RELOADb:
@@ -136,29 +113,6 @@ std::uint32_t getReloadLoadRI(std::uint32_t opcode) {
   case AltairX::LoadRId: [[fallthrough]];
   case AltairX::LoadRIq:
     return opcode; // return identity for LoadRIs
-  default:
-    llvm_unreachable("Invalid reload instruction");
-  }
-}
-
-std::uint32_t getReloadLoadSP(std::uint32_t opcode) {
-  switch (opcode) {
-  case AltairX::RELOADb:
-    return AltairX::LoadSPb;
-  case AltairX::RELOADw:
-    return AltairX::LoadSPw;
-  case AltairX::RELOADd:
-    return AltairX::LoadSPd;
-  case AltairX::RELOADq:
-    return AltairX::LoadSPq;
-  case AltairX::LoadRIb: // LoadRI may be morphed into LoadSP
-    return AltairX::LoadSPb;
-  case AltairX::LoadRIw:
-    return AltairX::LoadSPw;
-  case AltairX::LoadRId:
-    return AltairX::LoadSPd;
-  case AltairX::LoadRIq:
-    return AltairX::LoadSPq;
   default:
     llvm_unreachable("Invalid reload instruction");
   }
@@ -218,9 +172,7 @@ void replaceFrameIndex(MachineBasicBlock::iterator II,
     }
 
     std::uint32_t realOpcode{};
-    if (AltairX::SPReg64RegClass.contains(FrameReg) && isUInt<16>(Offset)) {
-      realOpcode = getSpillStoreSP(opcode);
-    } else if (isInt<32>(Offset)) {
+    if (isInt<33>(Offset)) {
       realOpcode = getSpillStoreRI(opcode);
     } else {
       llvm_unreachable("Unsupported offset for spill");
@@ -257,9 +209,7 @@ void replaceFrameIndex(MachineBasicBlock::iterator II,
     }
 
     std::uint32_t realOpcode{};
-    if (AltairX::SPReg64RegClass.contains(FrameReg) && isUInt<16>(Offset)) {
-      realOpcode = getReloadLoadSP(opcode);
-    } else if (isInt<32>(Offset)) {
+    if (isInt<33>(Offset)) {
       realOpcode = getReloadLoadRI(opcode);
     } else {
       llvm_unreachable("Unsupported offset for reload");
