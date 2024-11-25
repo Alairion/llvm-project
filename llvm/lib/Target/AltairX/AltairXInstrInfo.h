@@ -33,6 +33,14 @@ public:
                    bool KillSrc) const override;
 
   bool expandPostRAPseudo(MachineInstr& MI) const override;
+
+private:
+  void expandPostRAGlobalAddrValue(MachineInstr& MI) const;
+  void expandPostRARet(MachineInstr& MI) const;
+  void expandPostRAConstantToReg(MachineInstr& MI) const;
+
+public:
+
   /*
   MachineInstr* foldMemoryOperandImpl(
     MachineFunction& MF, MachineInstr& MI, ArrayRef<unsigned> Ops,
@@ -75,7 +83,18 @@ public:
   }
 
   static bool isCondBranchOpcode(const MachineInstr &MI) {
-    return MI.getOpcode() == AltairX::B;
+    return MI.getOpcode() == AltairX::BRC || MI.getOpcode() == AltairX::PseudoBRC;
+  }
+
+  static bool isCompare(const MachineInstr& MI) {
+    return MI.getOpcode() == AltairX::CmpRIb ||
+           MI.getOpcode() == AltairX::CmpRIw ||
+           MI.getOpcode() == AltairX::CmpRId ||
+           MI.getOpcode() == AltairX::CmpRIq ||
+           MI.getOpcode() == AltairX::CmpRRb ||
+           MI.getOpcode() == AltairX::CmpRRw ||
+           MI.getOpcode() == AltairX::CmpRRd ||
+           MI.getOpcode() == AltairX::CmpRRq;
   }
 
 protected:

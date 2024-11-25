@@ -60,12 +60,15 @@ foreach i = 9...20 in {
 }
 
 // Volatile registers
-foreach i = 21...31 in {
+foreach i = 21...30 in {
   def R#i#b : AltairXIntRegister<i, "r"#i, ["t"#!sub(i, 21)]>, DwarfRegNum<[i]>;
   def R#i#w : AltairXIntRegister<i, "r"#i, ["t"#!sub(i, 21)], [!cast<Register>("R"#i#"b")], [ISubReg8]>, DwarfRegNum<[i]>;
   def R#i#d : AltairXIntRegister<i, "r"#i, ["t"#!sub(i, 21)], [!cast<Register>("R"#i#"w")], [ISubReg16]>, DwarfRegNum<[i]>;
   def R#i   : AltairXIntRegister<i, "r"#i, ["t"#!sub(i, 21)], [!cast<Register>("R"#i#"d")], [ISubReg32]>, DwarfRegNum<[i]>;
 }
+
+// Link register
+def R31 : AltairXIntRegister<31, "r31", ["lr"]>, DwarfRegNum<[31]>;
 
 // Volatile renamed registers
 foreach i = 32...55 in {
@@ -91,44 +94,47 @@ def ZERO : AltairXIntRegister<63, "r63", ["zero"]>, DwarfRegNum<[63]>;
 // Registers are listed in the order volatile renamed, volatile, non-volatile, others.
 def GPIReg8 : RegisterClass<"AltairX", [i8], 8, (add
   (sequence "R%ub", 32, 55),
-  (sequence "R%ub", 21, 31),
+  (sequence "R%ub", 21, 30),
   (sequence "R%ub", 1, 8),
   (sequence "R%ub", 9, 20),
-  R0, ZERO),
+  ZERO),
   AltairXRegAltNameIndex
 >;
 
 def GPIReg16 : RegisterClass<"AltairX", [i16], 16, (add
   (sequence "R%uw", 32, 55),
-  (sequence "R%uw", 21, 31),
+  (sequence "R%uw", 21, 30),
   (sequence "R%uw", 1, 8),
   (sequence "R%uw", 9, 20),
-  R0, ZERO),
+  ZERO),
   AltairXRegAltNameIndex
 >;
 
 def GPIReg32 : RegisterClass<"AltairX", [i32], 32, (add
   (sequence "R%ud", 32, 55),
-  (sequence "R%ud", 21, 31),
+  (sequence "R%ud", 21, 30),
   (sequence "R%ud", 1, 8),
   (sequence "R%ud", 9, 20),
-  R0, ZERO),
+  ZERO),
   AltairXRegAltNameIndex
 >;
 
 def GPIReg64 : RegisterClass<"AltairX", [i64], 64, (add
+  R0,
   (sequence "R%u", 32, 55),
-  (sequence "R%u", 21, 31),
+  (sequence "R%u", 21, 30),
+  R31,
   (sequence "R%u", 1, 8),
   (sequence "R%u", 9, 20),
-  R0, ZERO),
+  ZERO),
   AltairXRegAltNameIndex
 >;
 
 def GPIRegs : RegisterCategory<[GPIReg64, GPIReg32, GPIReg16, GPIReg8]>;
 
 // Must contain only one register!
-def SPReg64 : RegisterClass<"AltairX", [i64], 64, (add R0), AltairXRegAltNameIndex>;
+// def SPReg64 : RegisterClass<"AltairX", [i64], 64, (add R0), AltairXRegAltNameIndex>;
+// def LRReg64 : RegisterClass<"AltairX", [i64], 64, (add R31), AltairXRegAltNameIndex>;
 
 // Quotien, remainder, and product (low), product (high)
 def RQb : AltairXRegister<0, "Qb", []>, DwarfRegNum<[64]>;
@@ -178,29 +184,26 @@ def MDUReg8  : RegisterClass<"AltairX", [i8], 8, (add RQb, RQRb, RPLb, RPHb)>;
 
 def MDURegs : RegisterCategory<[MDUReg64, MDUReg32, MDUReg16, MDUReg8]>;
 
-// Comparison flag
-def CmpFlag : AltairXRegister<0, "cmpflags", []>;
-
-// CmpFlag.
-def CmpFlagReg64 : RegisterClass<"AltairX", [i64], 64, (add CmpFlag)> {
-  let CopyCost = -1;  // Don't allow copying of flag register
-}
-
 // internal regs
-def LR : AltairXRegister<0, "LR", []>;
-def BR : AltairXRegister<1, "BR", []>;
-
-def RIReg32 : RegisterClass<"AltairX", [i32], 32, (add LR, BR)>;
+// flag register
+def FR : AltairXRegister<0, "fr", []>;
+def RIReg32 : RegisterClass<"AltairX", [i32], 32, (add FR)>{
+  let CopyCost = -1; // Disable implicit copy of these registers
+  let isAllocatable = 0;
+}
 
 // Registers that can be spilled one way or another.
 // Some of them may need additional temp register to be stored in a GPIReg
 def SpillableReg8 : RegisterClass<"AltairX", [i8], 8, (add GPIReg8, MDUReg8)>;
 def SpillableReg16 : RegisterClass<"AltairX", [i16], 16, (add GPIReg16, MDUReg16)>;
 def SpillableReg32 : RegisterClass<"AltairX", [i32], 32, (add GPIReg32, MDUReg32, RIReg32)>; // MDU regs
-def SpillableReg64 : RegisterClass<"AltairX", [i64], 64, (add SPReg64, GPIReg64, MDUReg64)>;
+def SpillableReg64 : RegisterClass<"AltairX", [i64], 64, (add GPIReg64, MDUReg64)>;
 
 // special regs...
-// def AccumulatorRegister : RegisterClass<"AltairX", [i64], 64, (add R56)>:
+def AccReg8 : RegisterClass<"AltairX", [i8], 8, (add R56)>;
+def AccReg16 : RegisterClass<"AltairX", [i16], 16, (add R56)>;
+def AccReg32 : RegisterClass<"AltairX", [i32], 32, (add R56)>;
+def AccReg64 : RegisterClass<"AltairX", [i64], 64, (add R56)>;
 
 //class AltairXF32Reg<bits<6> enc, bits<2> comp, string n, list<string> alt = [], list<Register> aliases> : AltairXReg<enc, n, alt> {
 //  let VectorComp = comp;

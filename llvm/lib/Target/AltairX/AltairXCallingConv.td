@@ -34,6 +34,6 @@ def AltairX_CRetConv : CallingConv<[
 
 def AltairX_CalleeSavedRegs : CalleeSavedRegs<(add 
   (sequence "R%u", 9, 20),
-  R31, // FP
-  LR
+  R30, // FP
+  R31 // LR
 )>;

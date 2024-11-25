@@ -52,7 +52,7 @@ public:
                                    SmallVectorImpl<MCFixup> &Fixups,
                                    const MCSubtargetInfo &STI) const;
 
-  // For imm value of absolute branches (brtarget operand type)
+  // For imm value of absolute branches (calltarget operand type)
   std::uint64_t getCallTargetOpValue(const MCInst& MI, std::uint32_t OpIdx,
                                      SmallVectorImpl<MCFixup>& Fixups,
                                      const MCSubtargetInfo& STI) const;

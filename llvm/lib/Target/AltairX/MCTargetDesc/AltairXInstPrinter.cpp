@@ -45,26 +45,35 @@ void AltairXInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
 }
 
 void AltairXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
-                                 StringRef Annot, const MCSubtargetInfo &STI,
-                                 raw_ostream &O) {
+                                   StringRef Annot, const MCSubtargetInfo &STI,
+                                   raw_ostream &O) {
+  if (MI->getOpcode() == AltairX::BUNDLE) {
+    const MCInst *first = MI->getOperand(0).getInst();
+    assert(first);
+    printInst(first, Address, Annot, STI, O);
+    O << "\n\t";
+    const MCInst *second = MI->getOperand(1).getInst();
+    assert(second);
+    printInst(second, Address, Annot, STI, O);
+  } else {
+    // Replace "add a, b, 0" with "move a, b"
+    if ((MI->getOpcode() == AltairX::AddRIb ||
+         MI->getOpcode() == AltairX::AddRIw ||
+         MI->getOpcode() == AltairX::AddRId ||
+         MI->getOpcode() == AltairX::AddRIq) &&
+        MI->getOperand(2).isImm() && MI->getOperand(2).getImm() == 0) {
+      O << '\t' << "move ";
+      printOperand(MI, 0, O);
+      O << ", ";
+      printOperand(MI, 1, O);
+    }
+    // Try to print any aliases first.
+    else if (!printAliasInstr(MI, Address, O)) {
+      printInstruction(MI, Address, O);
+    }
 
-  // Replace "add a, b, 0" with "move a, b"
-  if ((MI->getOpcode() == AltairX::AddRIb ||
-       MI->getOpcode() == AltairX::AddRIw ||
-       MI->getOpcode() == AltairX::AddRId ||
-       MI->getOpcode() == AltairX::AddRIq) &&
-      MI->getOperand(2).isImm() && MI->getOperand(2).getImm() == 0) {
-    O << '\t' << "move ";
-    printOperand(MI, 0, O);
-    O << ", ";
-    printOperand(MI, 1, O);
+    printAnnotation(O, Annot);
   }
-  // Try to print any aliases first.
-  else if (!printAliasInstr(MI, Address, O)) {
-    printInstruction(MI, Address, O);
-  }
-
-  printAnnotation(O, Annot);
 }
 
 void AltairXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
@@ -86,27 +95,19 @@ void AltairXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostre
 
 namespace {
 
-std::string_view condCodeToString(AltairX::CondCode condCode) {
+std::string_view condCodeToString(AltairX::BRCondCode condCode) {
   switch(condCode) {
-  case llvm::AltairX::CondCode::NE:
+  case llvm::AltairX::BRCondCode::NE:
     return "ne";
-  case llvm::AltairX::CondCode::EQ:
+  case llvm::AltairX::BRCondCode::EQ:
     return "eq";
-  case llvm::AltairX::CondCode::L:
-    return "l";
-  case llvm::AltairX::CondCode::LE:
-    return "le";
-  case llvm::AltairX::CondCode::G:
-    return "g";
-  case llvm::AltairX::CondCode::GE:
+  case llvm::AltairX::BRCondCode::LT:
+    return "lt";
+  case llvm::AltairX::BRCondCode::GE:
     return "ge";
-  case llvm::AltairX::CondCode::LS:
+  case llvm::AltairX::BRCondCode::LTS:
     return "ls";
-  case llvm::AltairX::CondCode::LES:
-    return "les";
-  case llvm::AltairX::CondCode::GS:
-    return "gs";
-  case llvm::AltairX::CondCode::GES:
+  case llvm::AltairX::BRCondCode::GES:
     return "ges";
   default:
     llvm_unreachable("Invalid AltairX::CondCode");
@@ -136,7 +137,13 @@ std::string_view SCMPCondCodeToString(AltairX::SCMPCondCode condCode)
 void AltairXInstPrinter::printCondCode(const MCInst *MI, uint32_t OpIdx,
                                        raw_ostream &OS) {
   const auto cc = MI->getOperand(OpIdx).getImm();
-  OS << condCodeToString(static_cast<AltairX::CondCode>(cc));
+  OS << condCodeToString(static_cast<AltairX::BRCondCode>(cc));
+}
+
+void AltairXInstPrinter::printBRCPrediction(const MCInst *MI, uint32_t OpIdx,
+                                            raw_ostream &OS) {
+  const auto value = MI->getOperand(OpIdx).getImm();
+  OS << (value ? 't' : 'f');
 }
 
 void AltairXInstPrinter::printSCMPCondCode(const MCInst *MI, uint32_t OpIdx,

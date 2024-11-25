@@ -21,9 +21,10 @@ def InstFormatALURegImm9 : InstFormat<4>;
 def InstFormatLSURegImm10 : InstFormat<5>;
 def InstFormatLSURegImm16 : InstFormat<6>;
 def InstFormatFPURegImm16 : InstFormat<7>;
-def InstFormatBRURelImm24 : InstFormat<8>;
-def InstFormatBRUAbsImm24 : InstFormat<9>;
-def InstFormatBRUSpecial : InstFormat<10>;
+def InstFormatBRURelImm23 : InstFormat<8>;
+def InstFormatBRURelImm24 : InstFormat<9>;
+def InstFormatBRUAbsImm24 : InstFormat<10>;
+def InstFormatBRUIndirect : InstFormat<11>;
 
 //===----------------------------------------------------------------------===//
 // Opcodes
@@ -49,7 +50,8 @@ def OPCODE_MOVEI : AltairXOpcodeALU0<0b1000>;
 def OPCODE_EXT : AltairXOpcodeALU0<0b0110>;
 def OPCODE_INS : AltairXOpcodeALU0<0b1110>;
 
-def OPCODE_SEXT : AltairXOpcodeALU0<0b0001>;
+def OPCODE_ADDS : AltairXOpcodeALU0<0b0001>;
+def OPCODE_SUBS : AltairXOpcodeALU0<0b1001>;
 
 def OPCODE_CMP  : AltairXOpcodeALU0<0b0011>;
 def OPCODE_TEST : AltairXOpcodeALU0<0b1011>;
@@ -89,14 +91,19 @@ class AltairXOpcodeLSU<bits<4> val>
   let Value{5-7} = 0b010;
 }
 
-def OPCODE_LD   : AltairXOpcodeLSU<0b0000>;
-def OPCODE_ST   : AltairXOpcodeLSU<0b1000>;
-def OPCODE_LDV  : AltairXOpcodeLSU<0b0100>;
-def OPCODE_STV  : AltairXOpcodeLSU<0b1100>;
-def OPCODE_LDI  : AltairXOpcodeLSU<0b0010>;
-def OPCODE_STI  : AltairXOpcodeLSU<0b1010>;
-def OPCODE_LDVI : AltairXOpcodeLSU<0b0110>;
-def OPCODE_STVI : AltairXOpcodeLSU<0b1110>;
+def OPCODE_LD  : AltairXOpcodeLSU<0b0000>;
+def OPCODE_LDS : AltairXOpcodeLSU<0b1000>;
+def OPCODE_FLD : AltairXOpcodeLSU<0b0100>;
+
+def OPCODE_ST  : AltairXOpcodeLSU<0b0010>;
+def OPCODE_FST : AltairXOpcodeLSU<0b0110>;
+
+def OPCODE_LDI  : AltairXOpcodeLSU<0b0001>;
+def OPCODE_LDIS : AltairXOpcodeLSU<0b1001>;
+def OPCODE_FLDI : AltairXOpcodeLSU<0b0101>;
+
+def OPCODE_STI  : AltairXOpcodeLSU<0b0011>;
+def OPCODE_FSTI : AltairXOpcodeLSU<0b0111>;
 
 class AltairXOpcodeMDU<bits<4> val>
   : AltairXOpcode {
@@ -104,31 +111,33 @@ class AltairXOpcodeMDU<bits<4> val>
   let Value{5-7} = 0b011;
 }
 
-def OPCODE_DIV    : AltairXOpcodeMDU<0b0000>;
-def OPCODE_DIVU   : AltairXOpcodeMDU<0b1000>;
-def OPCODE_MUL    : AltairXOpcodeMDU<0b0100>;
-def OPCODE_MULU   : AltairXOpcodeMDU<0b1100>;
-def OPCODE_MOVERQ : AltairXOpcodeMDU<0b0010>;
-def OPCODE_MOVEQR : AltairXOpcodeMDU<0b1010>;
+def OPCODE_DIV   : AltairXOpcodeMDU<0b0000>;
+def OPCODE_DIVU  : AltairXOpcodeMDU<0b1000>;
+def OPCODE_MUL   : AltairXOpcodeMDU<0b0100>;
+def OPCODE_MULU  : AltairXOpcodeMDU<0b1100>;
+def OPCODE_GETMD : AltairXOpcodeMDU<0b0010>;
+def OPCODE_SETMD : AltairXOpcodeMDU<0b1010>;
 
 class AltairXOpcodeGenericBranch // Used for brcond implementation
   : AltairXOpcode {
   let Value{5-7} = 0b111;
 }
 
-// BNE, BEQ ,BL, BLE, BG, BGE, BLS, BLES, BGS, BGES
-def OPCODE_B : AltairXOpcodeGenericBranch;
+// BNE, BEQ, BLT, BGE, BLTU, BGEU
+def OPCODE_BRC : AltairXOpcodeGenericBranch;
 
 class AltairXOpcodeBRU<bits<4> val>
   : AltairXOpcodeGenericBranch {
   let Value{1-4} = val;
 }
 
-def OPCODE_BRA  : AltairXOpcodeBRU<0b0101>;
+def OPCODE_BRA : AltairXOpcodeBRU<0b0001>;
+def OPCODE_CALLR : AltairXOpcodeBRU<0b1001>;
+def OPCODE_JUMP : AltairXOpcodeBRU<0b0101>;
+def OPCODE_CALL : AltairXOpcodeBRU<0b1101>;
 
-def OPCODE_JUMP : AltairXOpcodeBRU<0b0011>;
-def OPCODE_CALL : AltairXOpcodeBRU<0b1011>;
-def OPCODE_SPECIAL_JUMP : AltairXOpcodeBRU<0b1111>;
+def OPCODE_INDIRECT_CALLR : AltairXOpcodeBRU<0b1011>;
+def OPCODE_INDIRECT_CALL : AltairXOpcodeBRU<0b1111>;
 
 class AltairXOpcodeFPU<bits<4> val>
   : AltairXOpcode {
@@ -148,8 +157,8 @@ class AltairXOpcodeEFU<bits<4> val>
   let Value{5-7} = 0b101;
 }
 
-def OPCODE_MOVEIR : AltairXOpcodeEFU<0b0000>; // R <- LR/BR
-def OPCODE_MOVERI : AltairXOpcodeEFU<0b1000>; // LR/BR <- R
+def OPCODE_GETIR : AltairXOpcodeEFU<0b0000>; // R <- IR
+def OPCODE_SETFR : AltairXOpcodeEFU<0b1000>; // FR <- R
 
 //===----------------------------------------------------------------------===//
 // Instruction formats
@@ -203,6 +212,7 @@ class AltairXInstALURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Inst{31-26} = rd;
   let Inst{25-20} = rs1;
   let Inst{19-14} = rs2;
+  let Inst{11-13} = 0; // left-shift (imm3) 
   let Inst{10} = 0;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
@@ -304,7 +314,7 @@ class AltairXInstMDURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Opcode = opcode.Value;
 }
 
-class AltairXInstMDUMoveRI<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+class AltairXInstMDUGetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rd;
   bits<6> pq;
@@ -317,7 +327,7 @@ class AltairXInstMDUMoveRI<AltairXOpcode opcode, dag outs, dag ins, list<dag> pa
   let Opcode = opcode.Value;
 }
 
-class AltairXInstMDUMoveIR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+class AltairXInstMDUSetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rs1;
   bits<6> pq;
@@ -360,20 +370,26 @@ class AltairXInstLSURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Opcode = opcode.Value;
 }
 
-class AltairXInstLSUSP<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatLSURegImm16> {
-  bits<6> reg;
-  bits<16> offset;
+// BRU conditional branches (beq, blt, ...)
+class AltairXInstBRC<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatBRURelImm23> {
+  bits<23> target;
+  bits<3> cond;
+  bits<1> pred;
 
-  let Inst{31-26} = reg;
-  let Inst{25-10} = offset;
-  let Inst{9-8} = size;
-  let Opcode = opcode.Value;
+  let Opcode{7-5} = opcode.Value{7-5};
+  let Opcode{4} = 0;
+  let Opcode{3-1} = cond;
+  let Inst{31-9} = target;
+  let Inst{9} = pred;
+  
+  let isBranch = 1;
+  let isTerminator = 1;
 }
 
-// BRU
-class AltairXInstBR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatBRURelImm24> {
+// BRU unconditional branches (call, bra, ...)
+class AltairXInstBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatBRUAbsImm24> {
   bits<24> target;
 
   let Inst{31-8} = target;
@@ -381,25 +397,27 @@ class AltairXInstBR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, 
   
   let isBranch = 1;
   let isTerminator = 1;
-  let hasDelaySlot = 1;
+  let isBarrier = 1;
 }
 
-class AltairXCallInst<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatBRUAbsImm24> {
-  bits<24> addr;
-
-  let Inst{31-8} = addr;
+// BRU unconditional indirect branches (callr, call)
+class AltairXInstIndirectBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatBRUIndirect> {
+  bits<6> link;
+  bits<6> target;
+  
+  let Inst{31-26} = link;
+  let Inst{25-20} = target;
+  let Inst{19-14} = 0b111111; // zero
   let Opcode = opcode.Value;
-}
-
-class AltairXSpecialJumpInst<AltairXOpcode opcode, list<dag> pattern, string opcodestr, bits<4> command>
-  : AltairXInst<(outs), (ins), pattern, opcodestr, "", InstFormatBRUSpecial> {
-  let Inst{8-11} = command;
-  let Opcode = opcode.Value;
+  
+  let isBranch = 1;
+  let isTerminator = 1;
+  let isBarrier = 1;
 }
 
 // CU
-class AltairXInstCUMoveIR<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+class AltairXInstCUSetFR<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rs1;
   bits<6> ri;
@@ -407,18 +425,17 @@ class AltairXInstCUMoveIR<dag outs, dag ins, list<dag> pattern, string opcodestr
   let Inst{31-26} = 0b111111; // zero
   let Inst{25-20} = rs1;
   let Inst{19-14} = 0b111111; // zero
-  let Inst{11-13} = ri{0-2};
-  let Opcode = OPCODE_MOVEIR.Value;
+  let Opcode = OPCODE_SETFR.Value;
 }
 
-class AltairXInstCUMoveRI<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+class AltairXInstCUGetIR<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rd;
-  bits<6> ri;
+  bits<6> ir;
 
   let Inst{31-26} = rd;
   let Inst{25-20} = 0b111111; // zero
   let Inst{19-14} = 0b111111; // zero
-  let Inst{11-13} = ri{0-2};
-  let Opcode = OPCODE_MOVERI.Value;
+  let Inst{11-13} = ir{0-2};
+  let Opcode = OPCODE_GETIR.Value;
 }

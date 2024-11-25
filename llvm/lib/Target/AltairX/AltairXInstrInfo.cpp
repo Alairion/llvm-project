@@ -17,6 +17,7 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/Support/Debug.h"
@@ -44,7 +45,7 @@ bool IsGPIReg(MCRegister Reg) {
          AltairX::GPIReg8RegClass.contains(Reg);
 }
 
-std::uint32_t GetGPIRegCopy(MCRegister Reg) {
+uint32_t GetGPIRegCopy(MCRegister Reg) {
   if (AltairX::GPIReg64RegClass.contains(Reg)) {
     return AltairX::AddRIq;
   } else if (AltairX::GPIReg32RegClass.contains(Reg)) {
@@ -65,29 +66,29 @@ bool IsMDUReg(MCRegister Reg) {
          AltairX::MDUReg8RegClass.contains(Reg);
 }
 
-std::uint32_t GetGPIRegToMDURegCopy(MCRegister Reg) {
+uint32_t GetGPIRegToMDURegCopy(MCRegister Reg) {
   if (AltairX::MDUReg64RegClass.contains(Reg)) {
-    return AltairX::MOVEQRq;
+    return AltairX::SetMDq;
   } else if (AltairX::MDUReg32RegClass.contains(Reg)) {
-    return AltairX::MOVEQRd;
+    return AltairX::SetMDd;
   } else if (AltairX::MDUReg16RegClass.contains(Reg)) {
-    return AltairX::MOVEQRw;
+    return AltairX::SetMDw;
   } else if (AltairX::MDUReg8RegClass.contains(Reg)) {
-    return AltairX::MOVEQRb;
+    return AltairX::SetMDb;
   }
 
   llvm_unreachable("Wrong register class");
 }
 
-std::uint32_t GetMDURegToGPIRegCopy(MCRegister Reg) {
+uint32_t GetMDURegToGPIRegCopy(MCRegister Reg) {
   if (AltairX::MDUReg64RegClass.contains(Reg)) {
-    return AltairX::MOVERQq;
+    return AltairX::GetMDq;
   } else if (AltairX::MDUReg32RegClass.contains(Reg)) {
-    return AltairX::MOVERQd;
+    return AltairX::GetMDd;
   } else if (AltairX::MDUReg16RegClass.contains(Reg)) {
-    return AltairX::MOVERQw;
+    return AltairX::GetMDw;
   } else if (AltairX::MDUReg8RegClass.contains(Reg)) {
-    return AltairX::MOVERQb;
+    return AltairX::GetMDb;
   }
 
   llvm_unreachable("Wrong register class");
@@ -98,19 +99,19 @@ bool IsRIReg(MCRegister Reg)
   return AltairX::RIReg32RegClass.contains(Reg);
 }
 
-std::uint32_t GetGPIRegToRIRegCopy(MCRegister Reg)
+uint32_t GetGPIRegToRIRegCopy(MCRegister Reg)
 {
   if(AltairX::RIReg32RegClass.contains(Reg)) {
-    return AltairX::MOVEIR;
+    return AltairX::SetFR;
   }
 
   llvm_unreachable("Wrong register class");
 }
 
-std::uint32_t GetRIRegToGPIRegCopy(MCRegister Reg)
+uint32_t GetRIRegToGPIRegCopy(MCRegister Reg)
 {
   if(AltairX::RIReg32RegClass.contains(Reg)) {
-    return AltairX::MOVERI;
+    return AltairX::GetIR;
   }
 
   llvm_unreachable("Wrong register class");
@@ -236,14 +237,7 @@ void AltairXInstrInfo::loadRegFromStackSlot(
 
 namespace {
 
-bool isConstantToReg(const MachineInstr &MI) {
-  return MI.getOpcode() == AltairX::ConstantToRegb ||
-         MI.getOpcode() == AltairX::ConstantToRegw ||
-         MI.getOpcode() == AltairX::ConstantToRegd ||
-         MI.getOpcode() == AltairX::ConstantToRegq;
-}
-
-std::uint32_t getMoveIForReg(MCRegister Reg) {
+uint32_t getMoveIForReg(MCRegister Reg) {
   if (AltairX::GPIReg64RegClass.contains(Reg)) {
     return AltairX::MoveIq;
   } else if (AltairX::GPIReg32RegClass.contains(Reg)) {
@@ -264,55 +258,96 @@ bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   auto TRI = Subtarget.getRegisterInfo();
   DebugLoc DL = MI.getDebugLoc();
 
-  if (MI.getOpcode() == AltairX::AltairXGlobalAddrValue) {
-    const auto dest = MI.getOperand(0).getReg();
-    const GlobalValue *global = MI.getOperand(1).getGlobal();
-
-    BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::AddRIq))
-        .addReg(dest, getDefRegState(true))
-        .addReg(TRI->getZeroRegister(), 0)
-        .addGlobalAddress(global);
-  } else if (isConstantToReg(MI)) {
-    const auto dest = MI.getOperand(0).getReg();
-    const std::int64_t imm = MI.getOperand(1).getImm();
-
-    if (isInt<42>(imm)) {
-      // Fits movei + moveix
-      BuildMI(MBB, MI, MI.getDebugLoc(), get(getMoveIForReg(dest)))
-          .addReg(dest, getDefRegState(true))
-          .addImm(imm);
-    } else {
-      assert(AltairX::GPIReg64RegClass.contains(dest));
-      // movei + moveix supports the following ranges:
-      // 0000 0000 0000 0000 to 0000 01FF FFFF FFFF (2^41-1)
-      // FFFF FE00 0000 0000 (-2^41) to FFFF FFFF FFFF FFFF
-      // Range that we have to cover somehow
-      // 0000 0200 0000 0000 (2^41) to FFFF FDFF FFFF FFFF (-2^41 - 1)
-      const std::uint64_t uimm = static_cast<std::uint64_t>(imm);
-      const auto lowvalue = uimm & 0xFFFFFFFFull;
-      const auto highvalue = (uimm >> 32) & 0xFFFFFFFFull;
-
-      BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::MoveIq))
-        .addReg(dest, getDefRegState(true))
-        .addImm(highvalue);
-      
-      BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::LslRIq))
-        .addReg(dest)
-        .addReg(dest)
-        .addImm(32);
-
-      BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::AddRIq))
-        .addReg(dest)
-        .addReg(dest)
-        .addImm(lowvalue);
-    }
-  } else {
+  switch(MI.getOpcode())
+  {
+  case AltairX::AltairXGlobalAddrValue:
+    expandPostRAGlobalAddrValue(MI);
+    break;
+  case AltairX::Ret:
+    expandPostRARet(MI);
+    break;
+  case AltairX::ConstantToRegb:
+    [[fallthrough]];
+  case AltairX::ConstantToRegw:
+    [[fallthrough]];
+  case AltairX::ConstantToRegd:
+    [[fallthrough]];
+  case AltairX::ConstantToRegq:
+    expandPostRAConstantToReg(MI);
+    break;
+  default:
     return false;
   }
 
   MBB.erase(MI);
   return true;
 }
+
+void AltairXInstrInfo::expandPostRAGlobalAddrValue(MachineInstr& MI) const
+{
+  MachineBasicBlock& MBB = *MI.getParent();
+  auto* TRI = Subtarget.getRegisterInfo();
+
+  const auto dest = MI.getOperand(0).getReg();
+  const GlobalValue* global = MI.getOperand(1).getGlobal();
+
+  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::AddRIq))
+    .addReg(dest, getDefRegState(true))
+    .addReg(TRI->getZeroRegister(), 0)
+    .addGlobalAddress(global);
+}
+
+void AltairXInstrInfo::expandPostRARet(MachineInstr& MI) const
+{
+  MachineBasicBlock& MBB = *MI.getParent();
+  auto* TRI = Subtarget.getRegisterInfo();
+
+  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCall))
+    .addReg(TRI->getZeroRegister())
+    .addReg(TRI->getLinkRegister());
+}
+
+void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr& MI) const
+{
+  MachineBasicBlock& MBB = *MI.getParent();
+  DebugLoc dl{MI.getDebugLoc()};
+
+  const auto dest = MI.getOperand(0).getReg();
+  const std::int64_t imm = MI.getOperand(1).getImm();
+
+  if (isInt<42>(imm)) {
+    // Fits movei + moveix
+    BuildMI(MBB, MI, dl, get(getMoveIForReg(dest)))
+        .addReg(dest, getDefRegState(true))
+        .addImm(imm);
+  } else {
+    assert(AltairX::GPIReg64RegClass.contains(dest) && "Out of range imm");
+
+    // movei + moveix supports the following ranges:
+    // 0000 0000 0000 0000 to 0000 01FF FFFF FFFF (2^41-1)
+    // FFFF FE00 0000 0000 (-2^41) to FFFF FFFF FFFF FFFF
+    // Range that we have to cover somehow
+    // 0000 0200 0000 0000 (2^41) to FFFF FDFF FFFF FFFF (-2^41 - 1)
+    const std::uint64_t uimm = static_cast<std::uint64_t>(imm);
+    const auto lowvalue = uimm & 0xFFFFFFFFull;
+    const auto highvalue = (uimm >> 32) & 0xFFFFFFFFull;
+
+    BuildMI(MBB, MI, dl, get(AltairX::MoveIq))
+        .addReg(dest, getDefRegState(true))
+        .addImm(highvalue);
+
+    BuildMI(MBB, MI, dl, get(AltairX::LslRIq))
+        .addReg(dest)
+        .addReg(dest)
+        .addImm(32);
+
+    BuildMI(MBB, MI, dl, get(AltairX::AddRIq))
+        .addReg(dest)
+        .addReg(dest)
+        .addImm(lowvalue);
+  }
+}
+
 
 bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
                                      MachineBasicBlock *&TBB,
@@ -409,13 +444,13 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
 
 bool AltairXInstrInfo::reverseBranchCondition(
     SmallVectorImpl<MachineOperand> &Cond) const {
-  assert(Cond.size() == 1 &&
-         "Expect a single condition code from analyseBranch!");
+  assert(Cond.size() == 1 && "Expected from analyseBranch");
+  assert(Cond[0].getParent()->getOpcode() == AltairX::PseudoBRC &&
+    "AltairXInstrInfo::reverseBranchCondition only works with PseudoBRC!");
 
-  const auto cc = AltairX::reverseCondCode(
-      static_cast<AltairX::CondCode>(Cond[0].getImm()));
-
-  Cond[0].setImm(static_cast<int64_t>(cc));
+  const auto cc = static_cast<ISD::CondCode>(Cond[0].getImm());
+  const auto inversed = ISD::getSetCCInverse(cc, MVT::i64); // any int type
+  Cond[0].setImm(static_cast<int64_t>(inversed));
   return false;
 }
 
@@ -473,7 +508,9 @@ unsigned AltairXInstrInfo::insertBranch(MachineBasicBlock &MBB,
     if (Cond.empty()) { // Unconditional branch
       BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(TBB);
     } else {
-      BuildMI(&MBB, DL, get(AltairX::B)).addMBB(TBB).addImm(Cond[0].getImm());
+      BuildMI(&MBB, DL, get(AltairX::PseudoBRC))
+        .addMBB(TBB)
+        .addImm(Cond[0].getImm());
     }
 
     if (BytesAdded) {
@@ -484,7 +521,9 @@ unsigned AltairXInstrInfo::insertBranch(MachineBasicBlock &MBB,
   }
 
   // Two-way conditional branch.
-  BuildMI(&MBB, DL, get(AltairX::B)).addMBB(TBB).addImm(Cond[0].getImm());
+  BuildMI(&MBB, DL, get(AltairX::PseudoBRC))
+    .addMBB(TBB)
+    .addImm(Cond[0].getImm());
   BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(FBB);
   if (BytesAdded) {
     *BytesAdded = 8;
@@ -498,7 +537,9 @@ AltairXInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
   switch (MI.getOpcode()) {
   case AltairX::BRA:
     [[fallthrough]];
-  case AltairX::B:
+  case AltairX::PseudoBRC:
+    [[fallthrough]];
+  case AltairX::BRC:
     return MI.getOperand(0).getMBB();
   default:
     llvm_unreachable("unexpected opcode!");
