@@ -23,6 +23,10 @@ class FunctionPass;
 class PassRegistry;
 
 // Declare functions to create passes here!
+FunctionPass* createAltairXBranchPatcherPass();
+void initializeAltairXBranchPatcherPass(PassRegistry&);
+
+// Declare functions to create passes here!
 FunctionPass *createAltairXMoveIXFillerPass();
 void initializeAltairXMoveIXFillerPass(PassRegistry&);
 

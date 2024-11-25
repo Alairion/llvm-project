@@ -4,44 +4,41 @@
 #include <cstdint>
 
 #include "llvm/Support/ErrorHandling.h"
+#include <llvm/CodeGen/MachineOperand.h>
 
 namespace llvm::AltairX {
 
-enum class CondCode : std::uint32_t {
-  NE = 0b0000, // Not equal
-  EQ = 0b1000, // Equal
-  L = 0b0100, // Less
-  LE = 0b1100, // Less or equal
-  G = 0b0010, // Greater
-  GE = 0b1010, // Greater or equal
-  LS = 0b0110, // Less (signed)
-  LES = 0b1110, // Less or equal (signed)
-  GS = 0b0001, // Greater (signed)
-  GES = 0b1001 // Greater or equal (signed)
+// Natively supported condition codes for BRC
+enum class BRCondCode : std::uint32_t {
+  NE = 0b000,  // Not equal
+  EQ = 0b100,  // Equal
+  LT = 0b010,  // Less
+  GE = 0b110,  // Greater or equal
+  LTS = 0b001, // Less (signed)
+  GES = 0b101, // Greater or equal (signed)
 };
 
-inline CondCode reverseCondCode(CondCode cc) noexcept {
-  switch (cc) {
-  case CondCode::NE:
-    return CondCode::EQ;
-  case CondCode::EQ:
-    return CondCode::NE;
-  case CondCode::L:
-    return CondCode::GE;
-  case CondCode::LE:
-    return CondCode::G;
-  case CondCode::G:
-    return CondCode::LE;
-  case CondCode::GE:
-    return CondCode::L;
-  case CondCode::LS:
-    return CondCode::GES;
-  case CondCode::LES:
-    return CondCode::GS;
-  case CondCode::GS:
-    return CondCode::LES;
-  case CondCode::GES:
-    return CondCode::LS;
+struct ConditionOperands
+{
+  BRCondCode cc;
+  MachineOperand left;
+  MachineOperand right;
+};
+
+inline ConditionOperands reverseCondition(const ConditionOperands& operands) noexcept {
+  switch (operands.cc) {
+  case BRCondCode::NE:
+    return {BRCondCode::EQ, operands.left, operands.right};
+  case BRCondCode::EQ:
+    return {BRCondCode::NE, operands.left, operands.right};
+  case BRCondCode::LT:
+    return {BRCondCode::LT, operands.right, operands.left};
+  case BRCondCode::GE:
+    return {BRCondCode::GE, operands.right, operands.left};
+  case BRCondCode::LTS:
+    return {BRCondCode::LTS, operands.right, operands.left};
+  case BRCondCode::GES:
+    return {BRCondCode::GES, operands.right, operands.left};
   default:
     llvm_unreachable("Unknown codecode");
   }

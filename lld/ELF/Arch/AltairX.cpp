@@ -43,15 +43,25 @@ RelExpr AltairX::getRelExpr(RelType type, const Symbol &s,
   switch (type) {
   case R_ALTAIRX_NONE:
     return R_NONE;
-  case R_ALTAIRX_CALL24:
+  case R_ALTAIRX_PCREL24LO:
+    return R_GOTREL;
+  case R_ALTAIRX_PCREL24HI:
+    return R_GOTREL;
+  case R_ALTAIRX_ABS24LO:
+    return R_ABS;
+  case R_ALTAIRX_ABS24HI:
     return R_ABS;
   case R_ALTAIRX_MOVEIX9LO:
     return R_ABS;
-  case R_ALTAIRX_MOVEIX9HI24:
+  case R_ALTAIRX_MOVEIX9HI:
     return R_ABS;
   case R_ALTAIRX_MOVEIX10LO:
     return R_ABS;
-  case R_ALTAIRX_MOVEIX10HI24:
+  case R_ALTAIRX_MOVEIX10HI:
+    return R_ABS;
+  case R_ALTAIRX_MOVEIX18LO:
+    return R_ABS;
+  case R_ALTAIRX_MOVEIX18HI:
     return R_ABS;
   default:
     error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
@@ -74,20 +84,35 @@ void AltairX::relocate(std::uint8_t *loc, const Relocation &rel,
   switch (rel.type) {
   case R_ALTAIRX_NONE:
     break;
-  case R_ALTAIRX_CALL24:
+  case R_ALTAIRX_PCREL24LO:
     writeBits(loc, 8, val, 0, 24);
+    break;
+  case R_ALTAIRX_PCREL24HI:
+    writeBits(loc, 8, val, 24, 24);
+    break;
+  case R_ALTAIRX_ABS24LO:
+    writeBits(loc, 8, val, 0, 24);
+    break;
+  case R_ALTAIRX_ABS24HI:
+    writeBits(loc, 8, val, 24, 24);
     break;
   case R_ALTAIRX_MOVEIX9LO:
     writeBits(loc, 11, val, 0, 9);
     break;
-  case R_ALTAIRX_MOVEIX9HI24:
+  case R_ALTAIRX_MOVEIX9HI:
     writeBits(loc, 8, val, 9, 24);
     break;
   case R_ALTAIRX_MOVEIX10LO:
     writeBits(loc, 10, val, 0, 10);
     break;
-  case R_ALTAIRX_MOVEIX10HI24:
+  case R_ALTAIRX_MOVEIX10HI:
     writeBits(loc, 8, val, 10, 24);
+    break;
+  case R_ALTAIRX_MOVEIX18LO:
+    writeBits(loc, 8, val, 0, 18);
+    break;
+  case R_ALTAIRX_MOVEIX18HI:
+    writeBits(loc, 8, val, 18, 24);
     break;
   default:
     llvm_unreachable("unknown relocation");

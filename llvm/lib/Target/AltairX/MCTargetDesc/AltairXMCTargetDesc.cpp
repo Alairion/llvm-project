@@ -45,7 +45,7 @@ static MCInstrInfo *createAltairXMCInstrInfo() {
 
 static MCRegisterInfo *createAltairXMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitAltairXMCRegisterInfo(X, AltairX::LR);
+  InitAltairXMCRegisterInfo(X, AltairX::R31, 0, 0, 0);
   return X;
 }
 
