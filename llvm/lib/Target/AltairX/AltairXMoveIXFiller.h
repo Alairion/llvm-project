@@ -3,9 +3,6 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //===----------------------------------------------------------------------===//
-// This file contains the AltairX implementation of the TargetRegisterInfo
-// class.
-//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_LIB_TARGET_ALTAIRX_MOVEIXFILLER_H
 #define LLVM_LIB_TARGET_ALTAIRX_MOVEIXFILLER_H
@@ -14,7 +11,6 @@
 #include "AltairXInstrInfo.h"
 
 #include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/CodeGen/MachineBranchProbabilityInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
@@ -33,7 +29,7 @@ public:
   static char ID;
 
 private:
-  void runOnMachineBasicBlock(MachineBasicBlock& bb);
+  void runOnMachineBasicBlock(MachineBasicBlock& MBB);
 
   const TargetMachine* TM{};
   const AltairXInstrInfo* TII{};

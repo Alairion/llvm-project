@@ -176,7 +176,10 @@ void AltairXFrameLowering::determineCalleeSaves(MachineFunction &MF,
 
   // Mark FP as used
   if(hasFP(MF)) {
-    SavedRegs.set(AltairX::R31);
+    auto *TRI = STI.getRegisterInfo();
+    for (auto reg : TRI->subregs_inclusive(TRI->getFrameRegister(MF))) {
+      SavedRegs.set(reg);
+    }
   }
 }
 

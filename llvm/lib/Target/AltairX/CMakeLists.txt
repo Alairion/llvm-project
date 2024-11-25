@@ -17,6 +17,7 @@ add_public_tablegen_target(AltairXCommonTableGen)
 
 add_llvm_target(AltairXCodeGen
   AltairXAsmPrinter.cpp
+  AltairXBranchPatcher.cpp
   AltairXFrameLowering.cpp
   AltairXInstrInfo.cpp
   AltairXISelLowering.cpp

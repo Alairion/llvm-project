@@ -48,6 +48,7 @@ public:
 
   // Special regs
   Register getStackRegister() const;
+  Register getLinkRegister() const;
   Register getZeroRegister() const;
   Register getFrameRegister(const MachineFunction &MF) const override;
 

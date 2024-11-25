@@ -116,6 +116,8 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AltairXISD::Call";
   case AltairXISD::JUMP:
     return "AltairXISD::Jump";
+  case AltairXISD::INDIRECT_CALL:
+    return "AltairXISD::IndirectCall";
   case AltairXISD::CMP:
     return "AltairXISD::Cmp";
   case AltairXISD::BRCOND:
@@ -629,38 +631,6 @@ SDValue promoteConstant(SelectionDAG &DAG, SDLoc dl, SDValue node) {
   return node;
 }
 
-AltairX::CondCode toAltairXCondCode(ISD::CondCode value) {
-  switch(value) {
-  case ISD::SETUEQ:
-    return AltairX::CondCode::EQ;
-  case ISD::SETUGT:
-    return AltairX::CondCode::G;
-  case ISD::SETUGE:
-    return AltairX::CondCode::GE;
-  case ISD::SETULT:
-    return AltairX::CondCode::L;
-  case ISD::SETULE:
-    return AltairX::CondCode::LE;
-  case ISD::SETUNE:
-    return AltairX::CondCode::NE;
-  case ISD::SETEQ:
-    return AltairX::CondCode::EQ;
-  case ISD::SETGT:
-    return AltairX::CondCode::GS;
-  case ISD::SETGE:
-    return AltairX::CondCode::GES;
-  case ISD::SETLT:
-    return AltairX::CondCode::LS;
-  case ISD::SETLE:
-    return AltairX::CondCode::LES;
-  case ISD::SETNE:
-    return AltairX::CondCode::NE;
-  default:
-    llvm_unreachable("Unsupported ISD::CondCode");
-    break;
-  }
-}
-
 std::optional<SDValue> MatchesSBit(SelectionDAG &DAG, SDLoc dl,
                                    SDValue comparedNode, SDValue andNode,
                                    ISD::CondCode cc) {
@@ -875,37 +845,69 @@ SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
                      cmoveOps.falseVal, setcc, cmoveOps.trueVal);
 }
 
+namespace
+{
+
+AltairX::BRCondCode toAltairXBRCondCode(ISD::CondCode value)
+{
+  switch(value) {
+  case ISD::SETUEQ:
+    return AltairX::BRCondCode::EQ;
+  case ISD::SETUGE:
+    return AltairX::BRCondCode::GE;
+  case ISD::SETULT:
+    return AltairX::BRCondCode::LT;
+  case ISD::SETUNE:
+    return AltairX::BRCondCode::NE;
+  case ISD::SETEQ:
+    return AltairX::BRCondCode::EQ;
+  case ISD::SETGE:
+    return AltairX::BRCondCode::GES;
+  case ISD::SETLT:
+    return AltairX::BRCondCode::LTS;
+  case ISD::SETNE:
+    return AltairX::BRCondCode::NE;
+  default:
+    llvm_unreachable("Unsupported ISD::CondCode. AltairX only supports ==, !=, "
+      "< and >= predicates.");
+    break;
+  }
+}
+
+} // namespace
+
 SDValue AltairXTargetLowering::LowerBRCOND(SDValue Op,
                                            SelectionDAG &DAG) const {
   SDValue chain = Op.getOperand(0);
   SDValue cond = Op.getOperand(1);
   SDValue dest = Op.getOperand(2);
 
-  if(cond->getOpcode() == ISD::SETCC) {
-    const ISD::CondCode cc = cast<CondCodeSDNode>(cond->getOperand(2))->get();
-    const auto nativecc = static_cast<std::uint64_t>(toAltairXCondCode(cc));
-
-    SDLoc DL{cond};
-    SDValue ccval = DAG.getConstant(nativecc, DL, MVT::i32);
-    return DAG.getNode(AltairXISD::BRCOND, DL, MVT::Other, chain, dest, ccval, cond);
+  if (cond->getOpcode() != ISD::SETCC) {
+    llvm_unreachable("Unsupported BRCOND conditional operand");
   }
 
-  llvm_unreachable("Unsupported BRCOND conditional operand");
+  const auto cc = cast<CondCodeSDNode>(cond->getOperand(2))->get();
+
+  SDLoc dl{cond};
+  SDValue ccval = DAG.getConstant(static_cast<uint64_t>(cc), dl, MVT::i32);
+  return DAG.getNode(AltairXISD::BRCOND, dl, MVT::Other, chain, dest, ccval,
+                     cond);
 }
 
 SDValue AltairXTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   SDValue chain = Op.getOperand(0);
-  const ISD::CondCode cc = cast<CondCodeSDNode>(Op.getOperand(1))->get();
+  const auto cc = cast<CondCodeSDNode>(Op.getOperand(1))->get();
   SDValue left = Op.getOperand(2);
   SDValue right = Op.getOperand(3);
   SDValue dest = Op.getOperand(4);
 
   const auto type = right.getValueType();
-  const auto nativecc = static_cast<std::uint64_t>(toAltairXCondCode(cc));
 
   SDLoc dl{Op};
-  SDValue cmp = DAG.getNode(AltairXISD::CMP, dl, type, left, right);
-  SDValue ccval = DAG.getConstant(nativecc, dl, MVT::i32);
-  return DAG.getNode(AltairXISD::BRCOND, dl, MVT::Other, chain, dest, ccval, cmp);
+  SDValue realRight = promoteConstant(DAG, dl, right);
+  SDValue cmp = DAG.getNode(AltairXISD::CMP, dl, type, left, realRight);
+  SDValue ccval = DAG.getConstant(static_cast<uint64_t>(cc), dl, MVT::i32);
+  return DAG.getNode(AltairXISD::BRCOND, dl, MVT::Other, chain, dest, ccval,
+                     cmp);
 }
 

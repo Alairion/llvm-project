@@ -30,6 +30,7 @@ enum NodeType {
   RET,
   CALL,
   JUMP,
+  INDIRECT_CALL,
   CMP,
   BRCOND,
   SBIT,

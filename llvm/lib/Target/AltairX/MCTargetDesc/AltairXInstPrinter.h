@@ -38,6 +38,7 @@ public:
                                raw_ostream &OS);
 
   void printCondCode(const MCInst* MI, uint32_t OpIdx, raw_ostream& OS);
+  void printBRCPrediction(const MCInst* MI, uint32_t OpIdx, raw_ostream& OS);
   void printSCMPCondCode(const MCInst* MI, uint32_t OpIdx, raw_ostream& OS);
 
 private:

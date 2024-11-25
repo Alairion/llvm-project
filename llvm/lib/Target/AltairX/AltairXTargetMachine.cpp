@@ -119,6 +119,7 @@ bool AltairXPassConfig::addInstSelector() {
 // machine code is emitted. return true if -print-machineinstrs should
 // print out the code after the passes.
 void AltairXPassConfig::addPreEmitPass() {
+  addPass(createAltairXBranchPatcherPass());
   addPass(createAltairXMoveIXFillerPass());
 }
 
