@@ -61,9 +61,10 @@ enum InstFormat {
   InstFormatLSURegImm10 = 5,
   InstFormatLSURegImm16 = 6,
   InstFormatFPURegImm16 = 7,
-  InstFormatBRURelImm24 = 8,
-  InstFormatBRUAbsImm24 = 9,
-  InstFormatBRUSpecial = 10,
+  InstFormatBRURelImm23 = 8,
+  InstFormatBRURelImm24 = 9,
+  InstFormatBRUAbsImm24 = 10,
+  InstFormatBRUIndirect = 11,
 };
 
 }

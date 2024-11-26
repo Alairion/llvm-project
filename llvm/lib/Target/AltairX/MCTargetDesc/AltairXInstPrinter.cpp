@@ -34,14 +34,7 @@ AltairXInstPrinter::AltairXInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &
     : MCInstPrinter(MAI, MII, MRI) {}
 
 void AltairXInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
-  if(Reg >= AltairX::R0) // TODO: do this correctly :)
-  {
-    OS << getRegisterName(Reg, AltairX::AltairXRegAltNameIndex);
-  }
-  else
-  {
-    OS << getRegisterName(Reg, AltairX::NoRegAltName);
-  }
+  OS << getRegisterName(Reg, AltairX::AltairXRegPrettyNameIndex);
 }
 
 void AltairXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
@@ -50,29 +43,13 @@ void AltairXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
   if (MI->getOpcode() == AltairX::BUNDLE) {
     const MCInst *first = MI->getOperand(0).getInst();
     assert(first);
-    printInst(first, Address, Annot, STI, O);
+    printSingleInst(first, Address, Annot, STI, O);
     O << "\n\t";
     const MCInst *second = MI->getOperand(1).getInst();
     assert(second);
-    printInst(second, Address, Annot, STI, O);
+    printSingleInst(second, Address, Annot, STI, O);
   } else {
-    // Replace "add a, b, 0" with "move a, b"
-    if ((MI->getOpcode() == AltairX::AddRIb ||
-         MI->getOpcode() == AltairX::AddRIw ||
-         MI->getOpcode() == AltairX::AddRId ||
-         MI->getOpcode() == AltairX::AddRIq) &&
-        MI->getOperand(2).isImm() && MI->getOperand(2).getImm() == 0) {
-      O << '\t' << "move ";
-      printOperand(MI, 0, O);
-      O << ", ";
-      printOperand(MI, 1, O);
-    }
-    // Try to print any aliases first.
-    else if (!printAliasInstr(MI, Address, O)) {
-      printInstruction(MI, Address, O);
-    }
-
-    printAnnotation(O, Annot);
+    printSingleInst(MI, Address, Annot, STI, O);
   }
 }
 
@@ -91,6 +68,18 @@ void AltairXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostre
 
   assert(Op.isExpr() && "unknown operand kind in printOperand");
   Op.getExpr()->print(O, &MAI, true);
+}
+
+void AltairXInstPrinter::printSingleInst(const MCInst *MI, uint64_t Address,
+                                         StringRef Annot,
+                                         const MCSubtargetInfo &STI,
+                                         raw_ostream &O) {
+  // Try to print any aliases first.
+  if (!printAliasInstr(MI, Address, O)) {
+    printInstruction(MI, Address, O);
+  }
+
+  printAnnotation(O, Annot);
 }
 
 namespace {

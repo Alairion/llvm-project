@@ -210,9 +210,7 @@ def SDT_AltairXbrcond : SDTypeProfile<0, 3, [SDTCisVT<0, OtherVT>, SDTCisVT<1, i
 def AltairXbrcond : SDNode<"AltairXISD::BRCOND", SDT_AltairXbrcond, [SDNPHasChain]>;
 
 // PseudoBRC is a BRC that supports all predicates for simplicity (e.g. reverseBranch implementation)
-// It is extended in PostRAExpandPseudo.
-// When extended, it may swaps the latest CMP operands.
-// If an immediate ends up in left operand, it creates a ConstantToReg instruction.
+// It is extended in AltairXBranchPatcher pass, which does more than this actually.
 let isBranch = 1, isTerminator = 1, Uses = [FR] in
 def PseudoBRC : AltairXPseudo<
   (outs),
@@ -934,3 +932,6 @@ def CMoveRIb : CMoveRIInst<0, "b", GPIReg8,  i8imm,  s8imm32>;
 def CMoveRIw : CMoveRIInst<1, "w", GPIReg16, i16imm, s16imm32>;
 def CMoveRId : CMoveRIInst<2, "d", GPIReg32, i32imm, s32imm32>;
 def CMoveRIq : CMoveRIInst<3, "q", GPIReg64, i64imm, s64imm32>;
+
+// Assembler aliases
+include "AltairXInstrAliases.td"
