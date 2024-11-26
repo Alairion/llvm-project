@@ -118,6 +118,8 @@ void AltairXMCCodeEmitter::encodeInstruction(const MCInst &Inst,
 MCFixupKind AltairXMCCodeEmitter::getImmFixupFor(const MCInst& MI) const
 {
   switch(MCII.get(MI.getOpcode()).TSFlags) {
+  case AltairX::InstFormatBRURelImm23:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_pcrel23lo);
   case AltairX::InstFormatBRURelImm24:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_pcrel24lo);
   case AltairX::InstFormatBRUAbsImm24:
@@ -137,6 +139,8 @@ MCFixupKind AltairXMCCodeEmitter::getImmFixupFor(const MCInst& MI) const
 MCFixupKind AltairXMCCodeEmitter::getMoveIXFixupFor(const MCInst& MI) const
 {
   switch(MI.getOpcode()) {
+  case AltairX::MOVEIX23PCREL:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_pcrel23hi);
   case AltairX::MOVEIX24PCREL:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_pcrel24hi);
   case AltairX::MOVEIX24ABS:

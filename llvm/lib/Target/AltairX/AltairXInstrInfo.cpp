@@ -255,7 +255,6 @@ uint32_t getMoveIForReg(MCRegister Reg) {
 
 bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   MachineBasicBlock &MBB = *MI.getParent();
-  auto TRI = Subtarget.getRegisterInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   switch(MI.getOpcode())
@@ -328,6 +327,7 @@ void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr& MI) const
     // FFFF FE00 0000 0000 (-2^41) to FFFF FFFF FFFF FFFF
     // Range that we have to cover somehow
     // 0000 0200 0000 0000 (2^41) to FFFF FDFF FFFF FFFF (-2^41 - 1)
+    // AXIMPR: Some pattern could be matched with less instructions
     const std::uint64_t uimm = static_cast<std::uint64_t>(imm);
     const auto lowvalue = uimm & 0xFFFFFFFFull;
     const auto highvalue = (uimm >> 32) & 0xFFFFFFFFull;
@@ -341,10 +341,12 @@ void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr& MI) const
         .addReg(dest)
         .addImm(32);
 
-    BuildMI(MBB, MI, dl, get(AltairX::AddRIq))
-        .addReg(dest)
-        .addReg(dest)
-        .addImm(lowvalue);
+    if (lowvalue != 0) { // this is an obvious optimization
+      BuildMI(MBB, MI, dl, get(AltairX::AddRIq))
+          .addReg(dest)
+          .addReg(dest)
+          .addImm(lowvalue);
+    }
   }
 }
 
@@ -544,4 +546,22 @@ AltairXInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
   default:
     llvm_unreachable("unexpected opcode!");
   }
+}
+
+MachineOperand *AltairXInstrInfo::getLatestRegDef(MachineInstr &MI, Register reg) {
+  const auto &block = *MI.getParent();
+  const auto end = block.rend().getInstrIterator();
+  for (auto begin = MI.getIterator().getReverse(); begin != end; ++begin) {
+    MachineInstr &inst = *begin;
+    if (inst.getNumOperands() == 0) {
+      continue;
+    }
+
+    auto operand = inst.findRegisterDefOperand(reg, false, false);
+    if (operand) {
+      return operand;
+    }
+  }
+
+  return nullptr;
 }

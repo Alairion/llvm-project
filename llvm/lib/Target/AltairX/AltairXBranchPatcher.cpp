@@ -191,28 +191,11 @@ void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &MBB, MachineInstr &MI) {
   const auto reg = MI.getOperand(1).getReg();
   const auto killing = MI.getOperand(1).isKill();
 
-  // Find the last definition of left operand
-  // Only do something 
-  const auto end = MBB.rend().getInstrIterator();
-  MachineInstr *definition{nullptr};
-  for (auto begin = MI.getIterator().getReverse(); begin != end; ++begin) {
-    MachineInstr &inst = *begin;
-    if (inst.getNumOperands() == 0) {
-      continue;
-    }
-
-    auto operand = inst.findRegisterDefOperand(reg, false, false);
-    if (!operand) {
-      continue;
-    }
-
-    definition = &inst;
-    break;
-  }
-
-  if(!definition) {
+  MachineOperand* operand = AltairXInstrInfo::getLatestRegDef(MI, reg);
+  if(!operand) {
     return;
   }
+  MachineInstr* definition = operand->getParent();
 
   // Check if definition is a MoveI
   switch(definition->getOpcode()) {

@@ -64,6 +64,8 @@ AltairXMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
   static const std::array<MCFixupKindInfo, AltairX::NumTargetFixupKinds> infos{
       // This table *must* be in the order that the fixup_* kinds are defined
       // Name, Offset (bits), Size (bits), Flags
+      MCFixupKindInfo{"fixup_altairx_pcrel23lo", 9, 23, pcrel},
+      MCFixupKindInfo{"fixup_altairx_pcrel23hi", 9, 23, pcrel},
       MCFixupKindInfo{"fixup_altairx_pcrel24lo", 8, 24, pcrel},
       MCFixupKindInfo{"fixup_altairx_pcrel24hi", 8, 24, pcrel},
       MCFixupKindInfo{"fixup_altairx_abs24lo", 8, 24, 0},
@@ -171,6 +173,10 @@ AltairXMCAsmBackend::adjustImmValue(MCFixupKind kind,
                                     std::uint64_t Value) noexcept {
 
   switch (static_cast<AltairX::Fixups>(kind)) {
+  case AltairX::fixup_altairx_pcrel23lo:
+    return getMoveIXLowSignedValue<23, 4>(Value);
+  case AltairX::fixup_altairx_pcrel23hi:
+    return getMoveIXHighSignedValue<23, 4>(Value);
   case AltairX::fixup_altairx_pcrel24lo:
     return getMoveIXLowSignedValue<24, 4>(Value);
   case AltairX::fixup_altairx_pcrel24hi:

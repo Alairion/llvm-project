@@ -29,6 +29,10 @@ std::uint32_t AltairXELFObjectWriter::getRelocType(MCContext &Ctx,
   }
 
   switch(kind) {
+  case AltairX::fixup_altairx_pcrel23lo:
+    return ELF::R_ALTAIRX_PCREL23LO;
+  case AltairX::fixup_altairx_pcrel23hi:
+    return ELF::R_ALTAIRX_PCREL23HI;
   case AltairX::fixup_altairx_pcrel24lo:
     return ELF::R_ALTAIRX_PCREL24LO;
   case AltairX::fixup_altairx_pcrel24hi:

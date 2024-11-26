@@ -63,6 +63,8 @@ bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
     return llvm::isUInt<16>(static_cast<std::uint64_t>(imm));
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
+  case AltairX::InstFormatBRURelImm23:
+    return llvm::isInt<25>(imm); // always aligned on 4 bytes
   case AltairX::InstFormatBRURelImm24:
     return llvm::isInt<26>(imm); // always aligned on 4 bytes
   case AltairX::InstFormatBRUAbsImm24:
@@ -87,6 +89,8 @@ std::uint32_t immOperandIndex(const MachineInstr& inst)
     return 1;
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
+  case AltairX::InstFormatBRURelImm23:
+    return 0;
   case AltairX::InstFormatBRURelImm24:
     return 0;
   case AltairX::InstFormatBRUAbsImm24:
@@ -109,8 +113,10 @@ std::uint32_t getMoveIX(const MachineInstr& inst)
     llvm_unreachable("LDP/STP must not be matched if imm exceed 16-bits!");
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
+  case AltairX::InstFormatBRURelImm23:
+    return AltairX::MOVEIX23PCREL;
+  case AltairX::InstFormatBRURelImm24:
     return AltairX::MOVEIX24PCREL;
-    llvm_unreachable("todo: moveix");
   case AltairX::InstFormatBRUAbsImm24:
     return AltairX::MOVEIX24ABS;
   default:

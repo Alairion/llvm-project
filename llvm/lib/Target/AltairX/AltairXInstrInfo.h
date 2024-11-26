@@ -78,6 +78,11 @@ public:
 
   MachineBasicBlock* getBranchDestBlock(const MachineInstr& MI) const override;
 
+  // Find the last definition of reg before MI
+  // Return the *operand* if found, nullptr otherwise.
+  // A register may not be defined by an operand.
+  static MachineOperand* getLatestRegDef(MachineInstr& MI, Register reg);
+
   static bool isUncondBranchOpcode(const MachineInstr &MI) {
     return MI.getOpcode() == AltairX::BRA;
   }
