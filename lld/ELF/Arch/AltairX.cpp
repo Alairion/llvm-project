@@ -43,6 +43,10 @@ RelExpr AltairX::getRelExpr(RelType type, const Symbol &s,
   switch (type) {
   case R_ALTAIRX_NONE:
     return R_NONE;
+  case R_ALTAIRX_PCREL23LO:
+    return R_GOTREL;
+  case R_ALTAIRX_PCREL23HI:
+    return R_GOTREL;
   case R_ALTAIRX_PCREL24LO:
     return R_GOTREL;
   case R_ALTAIRX_PCREL24HI:
@@ -83,6 +87,12 @@ void AltairX::relocate(std::uint8_t *loc, const Relocation &rel,
                        std::uint64_t val) const {
   switch (rel.type) {
   case R_ALTAIRX_NONE:
+    break;
+  case R_ALTAIRX_PCREL23LO:
+    writeBits(loc, 9, val, 0, 24);
+    break;
+  case R_ALTAIRX_PCREL23HI:
+    writeBits(loc, 8, val, 23, 24);
     break;
   case R_ALTAIRX_PCREL24LO:
     writeBits(loc, 8, val, 0, 24);

@@ -25,10 +25,13 @@ class MCTargetOptions;
 
 namespace AltairX {
 enum Fixups {
-  // 24-bits pc-relative branch (bx, loop)
-  fixup_altairx_pcrel24lo = FirstTargetFixupKind,
+  // 24-bits pc-relative branch (brc)
+  fixup_altairx_pcrel23lo = FirstTargetFixupKind,
+  fixup_altairx_pcrel23hi,
+  // 24-bits pc-relative branch (bra, callr)
+  fixup_altairx_pcrel24lo,
   fixup_altairx_pcrel24hi,
-  // 24-bits fixup for absolute jumps (call, jump, ...)
+  // 24-bits fixup for absolute jumps (call, jump)
   fixup_altairx_abs24lo,
   fixup_altairx_abs24hi,
 

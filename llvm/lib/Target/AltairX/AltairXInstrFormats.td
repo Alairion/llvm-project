@@ -181,7 +181,7 @@ class AltairXInst<dag outs, dag ins, list<dag> pattern, string opcodestr, string
   dag OutOperandList = outs;
   dag InOperandList = ins;
   let Pattern = pattern;
-  let AsmString = opcodestr # " " # argstr;
+  let AsmString = opcodestr # "\t" # argstr;
 
   let TSFlags = format.Value;
 }
