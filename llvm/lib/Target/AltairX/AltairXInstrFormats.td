@@ -322,7 +322,7 @@ class AltairXInstMDUGetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pat
   let Inst{31-26} = rd;
   let Inst{25-20} = 0b111111; // zero
   let Inst{19-14} = 0b111111; // zero
-  let Inst{11-12} = pq{0-1};
+  let Inst{12-11} = pq{0-1};
   let Inst{10} = 0;
   let Opcode = opcode.Value;
 }
@@ -335,7 +335,7 @@ class AltairXInstMDUSetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pat
   let Inst{31-26} = 0b111111; // zero
   let Inst{25-20} = rs1;
   let Inst{19-14} = 0b111111; // zero
-  let Inst{11-12} = pq{0-1};
+  let Inst{12-11} = pq{0-1};
   let Inst{10} = 0;
   let Opcode = opcode.Value;
 }
@@ -349,9 +349,9 @@ class AltairXInstLSURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   bits<3> shift;
 
   let Inst{31-26} = reg;
-  let Inst{25-20} = offset;
-  let Inst{19-14} = base;
-  let Inst{11-13} = shift;
+  let Inst{25-20} = base;
+  let Inst{19-14} = offset;
+  let Inst{13-11} = shift;
   let Inst{10} = 0;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
@@ -370,26 +370,26 @@ class AltairXInstLSURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Opcode = opcode.Value;
 }
 
-// BRU conditional branches (beq, blt, ...)
+// BRU conditional branches (beq, blt, ...), always relative
 class AltairXInstBRC<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatBRURelImm23> {
   bits<23> target;
   bits<3> cond;
   bits<1> pred;
 
+  let Inst{31-9} = target;
+  let Inst{8} = pred;
   let Opcode{7-5} = opcode.Value{7-5};
   let Opcode{4} = 0;
   let Opcode{3-1} = cond;
-  let Inst{31-9} = target;
-  let Inst{9} = pred;
   
   let isBranch = 1;
   let isTerminator = 1;
 }
 
-// BRU unconditional branches (call, bra, ...)
-class AltairXInstBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatBRUAbsImm24> {
+// BRU generic unconditional branches, InstFormat will be used to discriminate relative jumps from absolute jumps
+class AltairXInstBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr, InstFormat format>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, format> {
   bits<24> target;
 
   let Inst{31-8} = target;
@@ -399,6 +399,14 @@ class AltairXInstBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern,
   let isTerminator = 1;
   let isBarrier = 1;
 }
+
+// BRU unconditional relative branches (callr, bra)
+class AltairXInstRelBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInstBRA<opcode, outs, ins, pattern, opcodestr, argstr, InstFormatBRURelImm24>;
+
+// BRU unconditional absolute branches (call, jump)
+class AltairXInstAbsBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInstBRA<opcode, outs, ins, pattern, opcodestr, argstr, InstFormatBRUAbsImm24>;
 
 // BRU unconditional indirect branches (callr, call)
 class AltairXInstIndirectBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
@@ -414,6 +422,7 @@ class AltairXInstIndirectBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> 
   let isBranch = 1;
   let isTerminator = 1;
   let isBarrier = 1;
+  let isIndirectBranch = 1;
 }
 
 // CU
@@ -436,6 +445,6 @@ class AltairXInstCUGetIR<dag outs, dag ins, list<dag> pattern, string opcodestr,
   let Inst{31-26} = rd;
   let Inst{25-20} = 0b111111; // zero
   let Inst{19-14} = 0b111111; // zero
-  let Inst{11-13} = ir{0-2};
+  let Inst{13-11} = ir{0-2};
   let Opcode = OPCODE_GETIR.Value;
 }

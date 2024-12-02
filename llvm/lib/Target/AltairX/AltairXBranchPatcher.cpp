@@ -105,25 +105,25 @@ BRCOperands analysePseudoBRC(ISD::CondCode value) {
   case ISD::SETUEQ:
     return {AltairX::BRCondCode::EQ, false};
   case ISD::SETUGT:
-    return {AltairX::BRCondCode::LT, true};
+    return {AltairX::BRCondCode::LTU, true};
   case ISD::SETUGE:
-    return {AltairX::BRCondCode::GE, false};
+    return {AltairX::BRCondCode::GEU, false};
   case ISD::SETULT:
-    return {AltairX::BRCondCode::LT, false};
+    return {AltairX::BRCondCode::LTU, false};
   case ISD::SETULE:
-    return {AltairX::BRCondCode::GE, true};
+    return {AltairX::BRCondCode::GEU, true};
   case ISD::SETUNE:
     return {AltairX::BRCondCode::NE, false};
   case ISD::SETEQ:
     return {AltairX::BRCondCode::EQ, false};
   case ISD::SETGT:
-    return {AltairX::BRCondCode::LTS, true};
+    return {AltairX::BRCondCode::LT, true};
   case ISD::SETGE:
-    return {AltairX::BRCondCode::GES, false};
+    return {AltairX::BRCondCode::GE, false};
   case ISD::SETLT:
-    return {AltairX::BRCondCode::LTS, false};
+    return {AltairX::BRCondCode::LT, false};
   case ISD::SETLE:
-    return {AltairX::BRCondCode::GES, true};
+    return {AltairX::BRCondCode::GE, true};
   case ISD::SETNE:
     return {AltairX::BRCondCode::NE, false};
   default:

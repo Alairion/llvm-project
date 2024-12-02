@@ -114,7 +114,10 @@ std::uint32_t getReloadLoadRI(std::uint32_t opcode) {
   case AltairX::LoadRIb: [[fallthrough]];
   case AltairX::LoadRIw: [[fallthrough]];
   case AltairX::LoadRId: [[fallthrough]];
-  case AltairX::LoadRIq:
+  case AltairX::LoadRIq: [[fallthrough]];
+  case AltairX::LoadSExtRIb: [[fallthrough]];
+  case AltairX::LoadSExtRIw: [[fallthrough]];
+  case AltairX::LoadSExtRId:
     return opcode; // return identity for LoadRIs
   default:
     llvm_unreachable("Invalid reload instruction");
@@ -132,7 +135,9 @@ bool isReload(std::uint32_t opcode) {
   return opcode == AltairX::RELOADb || opcode == AltairX::RELOADw ||
          opcode == AltairX::RELOADd || opcode == AltairX::RELOADq ||
          opcode == AltairX::LoadRIb || opcode == AltairX::LoadRIw ||
-         opcode == AltairX::LoadRId || opcode == AltairX::LoadRIq;
+         opcode == AltairX::LoadRId || opcode == AltairX::LoadRIq ||
+         opcode == AltairX::LoadSExtRIb || opcode == AltairX::LoadSExtRIw ||
+         opcode == AltairX::LoadSExtRId;
 }
 
 void replaceFrameIndex(MachineBasicBlock::iterator II,
@@ -167,6 +172,8 @@ void replaceFrameIndex(MachineBasicBlock::iterator II,
         .addReg(FrameReg, 0)
         .addImm(Offset)
         .addMemOperand(*MI.memoperands_begin());
+  } else {
+    llvm_unreachable("Unsupported Instruction for frame index elemination");
   }
 
   // Erase old instruction.

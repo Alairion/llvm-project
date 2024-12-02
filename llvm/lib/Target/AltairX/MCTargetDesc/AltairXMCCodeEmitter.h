@@ -48,14 +48,14 @@ public:
                                  const MCSubtargetInfo &STI) const;
 
   // For imm value of pcrel branches (brtarget operand type)
-  std::uint64_t getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
-                                   SmallVectorImpl<MCFixup> &Fixups,
-                                   const MCSubtargetInfo &STI) const;
+  std::uint64_t getRelBranchTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
+                                          SmallVectorImpl<MCFixup> &Fixups,
+                                          const MCSubtargetInfo &STI) const;
 
   // For imm value of absolute branches (calltarget operand type)
-  std::uint64_t getCallTargetOpValue(const MCInst& MI, std::uint32_t OpIdx,
-                                     SmallVectorImpl<MCFixup>& Fixups,
-                                     const MCSubtargetInfo& STI) const;
+  std::uint64_t getAbsBranchTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
+                                          SmallVectorImpl<MCFixup> &Fixups,
+                                          const MCSubtargetInfo &STI) const;
 
 protected:
   void encodeInstruction(const MCInst &Inst, raw_ostream &OS,

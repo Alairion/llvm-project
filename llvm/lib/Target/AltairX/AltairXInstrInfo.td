@@ -100,41 +100,41 @@ let Defs = [R0], Uses = [R0] in {
 
 // Absolute
 def calltarget : Operand<i64> {
-  let EncoderMethod = "getCallTargetOpValue";
+  let EncoderMethod = "getAbsBranchTargetOpValue";
 }
 
-// Relative
-def brtarget : Operand<OtherVT> {
-  let EncoderMethod = "getBRTargetOpValue";
-  //let OperandType = "OPERAND_PCREL";
-}
-
-// Call, does set R31 (link register)
+// Call sets R31 (link register)
 def STD_AltairXcall : SDTypeProfile<0, 1, [SDTCisPtrTy<0>]>;
 def AltairXcall : SDNode<"AltairXISD::CALL", STD_AltairXcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
 let Defs = [R31], isCall = 1 in
-def Call : AltairXInstBRA<OPCODE_CALL,
+def Call : AltairXInstAbsBRA<OPCODE_CALL,
   (outs),
   (ins calltarget:$target),
   [(AltairXcall tglobaladdr:$target)],
   "call", "$target">;
 def : Pat<(AltairXcall texternalsym:$func), (Call texternalsym:$func)>;
 
-// Jump, do not set R31 (link register)
+// Jump does not set R31 (link register)
 def STD_AltairXjump : SDTypeProfile<0, 1, [SDTCisPtrTy<0>]>;
-def AltairXjump : SDNode<"AltairXISD::JUMP", STD_AltairXcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+def AltairXjump : SDNode<"AltairXISD::JUMP", STD_AltairXjump, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
 let isCall = 1 in // not sure about that
-def Jump : AltairXInstBRA<OPCODE_JUMP,
+def Jump : AltairXInstAbsBRA<OPCODE_JUMP,
   (outs),
   (ins calltarget:$target),
   [(AltairXjump tglobaladdr:$target)],
   "jump", "$target">;
 def : Pat<(AltairXjump texternalsym:$func), (Jump texternalsym:$func)>;
 
-// Relative jump, do not set LR (link register)
-def BRA : AltairXInstBRA<OPCODE_BRA,
+// Relative
+def brtarget : Operand<OtherVT> {
+  let EncoderMethod = "getRelBranchTargetOpValue";
+  let PrintMethod = "printRelBranchTarget";
+  let OperandType = "OPERAND_PCREL";
+}
+
+def BRA : AltairXInstRelBRA<OPCODE_BRA,
   (outs),
   (ins brtarget:$target),
   [(br bb:$target)],
@@ -151,7 +151,7 @@ def STD_AltairXindirectcall : SDTypeProfile<1, 1, [SDTCisInt<0>, SDTCisInt<1>]>;
 def AltairXindirectcall : SDNode<"AltairXISD::INDIRECT_CALL", STD_AltairXindirectcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
 let isCall = 1 in // not sure about that
-def IndirectCall : AltairXInstBRA<OPCODE_INDIRECT_CALL,
+def IndirectCall : AltairXInstIndirectBRA<OPCODE_INDIRECT_CALL,
   (outs GPIReg64:$link),
   (ins GPIReg64:$target),
   [(set GPIReg64:$link, (AltairXindirectcall GPIReg64:$target))],
@@ -661,7 +661,7 @@ class LoadSExtRRInst<SDPatternOperator opnode, bits<2> size, string sizename>
   (outs GPIReg64:$reg),
   (ins GPIReg64:$base, GPIReg64:$offset, shiftAmount:$shift),
   [(set GPIReg64:$reg, (opnode (addr GPIReg64:$base, GPIReg64:$offset, u64imm3:$shift)))],
-  !strconcat("ld.", sizename), "$reg, $base[$offset << $shift]"> {
+  !strconcat("lds.", sizename), "$reg, $base[$offset << $shift]"> {
 }
 
 def LoadSExtRRb : LoadSExtRRInst<sextloadi8_i64,  0, "b">;
@@ -714,7 +714,7 @@ class LoadSExtRIInst<SDPatternOperator opnode, bits<2> size, string sizename>
   (outs GPIReg64:$reg),
   (ins GPIReg64:$base, i64imm:$offset),
   [(set GPIReg64:$reg, (opnode (addrimm GPIReg64:$base, i64imm:$offset)))],
-  !strconcat("ld.", sizename), "$reg, $offset[$base]"> {
+  !strconcat("lds.", sizename), "$reg, $offset[$base]"> {
 }
 
 def LoadSExtRIb : LoadSExtRIInst<sextloadi8_i64,  0, "b">;

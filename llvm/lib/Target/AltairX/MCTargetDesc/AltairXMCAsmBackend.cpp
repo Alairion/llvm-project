@@ -37,7 +37,7 @@ AltairXMCAsmBackend::createObjectTargetWriter() const {
   return std::make_unique<AltairXELFObjectWriter>(ELF::ELFOSABI_STANDALONE); // replace later ?
 }
 
-bool AltairXMCAsmBackend::writeNopData(raw_ostream &OS, std::uint64_t Count,
+bool AltairXMCAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
                                        const MCSubtargetInfo*) const {
   OS.write_zeros(llvm::alignTo(Count, 4)); // No-Op is just moveix 0, so 0
   return true;
@@ -87,7 +87,7 @@ AltairXMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
     return MCAsmBackend::getFixupKindInfo(Kind);
   }
 
-  assert(static_cast<std::uint32_t>(Kind - FirstTargetFixupKind) <
+  assert(static_cast<uint32_t>(Kind - FirstTargetFixupKind) <
              getNumFixupKinds() &&
          "Invalid kind!");
 
@@ -96,107 +96,105 @@ AltairXMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
 
 namespace {
 
-template <std::uint32_t N, std::uint64_t Align = 1>
-constexpr std::uint64_t getMoveIXLowSignedValue(std::uint64_t Value) noexcept {
+template <uint32_t N, uint64_t Align = 1>
+constexpr uint64_t getMoveIXLowSignedValue(uint64_t value) noexcept {
   // total size: N + MoveIX imm size (24)
-  constexpr std::uint32_t size = N + 24;
-  constexpr std::uint64_t mask = (1ull << (N - 1ull)) - 1ull;
-  constexpr std::uint64_t signmask = 1ull << size;
+  constexpr uint32_t size = N + 24;
+  constexpr uint64_t mask = (1ull << (N - 1ull)) - 1ull;
 
   // sanity checks
-  if (!isInt<size>(static_cast<std::int64_t>(Value))) {
+  if (!isInt<size>(static_cast<int64_t>(value))) {
     llvm_unreachable("fixup value out of range");
   }
-  if(Value % Align != 0) {
+  if (value % Align != 0) {
     llvm_unreachable("fixup value bad alignement");
   }
 
-  Value /= Align; // align value
+  // align value
   // put sign at bit N, and low (N - 1) bits in this instruction
-  return ((Value & signmask) >> 24) | (Value & mask);
+  const auto sign = static_cast<int64_t>(value) < 0 ? 1ull : 0ull;
+  return (sign << (N - 1)) | ((value / Align) & mask);
 }
 
-template <std::uint32_t N, std::uint64_t Align = 1>
-std::uint64_t getMoveIXHighSignedValue(std::uint64_t Value) noexcept {
-  constexpr std::uint32_t size = N + 24;
-  if (!isInt<size>(static_cast<std::int64_t>(Value))) {
+template <uint32_t N, uint64_t Align = 1>
+uint64_t getMoveIXHighSignedValue(uint64_t value) noexcept {
+  constexpr uint32_t size = N + 24;
+  if (!isInt<size>(static_cast<int64_t>(value))) {
     llvm_unreachable("fixup value out of range");
   }
-  if(Value % Align != 0) {
+  if(value % Align != 0) {
     llvm_unreachable("fixup value bad alignement");
   }
 
-  Value /= Align; // align value
+  value /= Align; // align value
   // put inversed bits [N - 1; N + 22] in moveix
-  return (Value >> (N - 1)) ^ 0x00FFFFFFull;
+  return (value >> (N - 1)) ^ 0x00FFFFFFull;
 }
 
-template <std::uint32_t N, std::uint64_t Align = 1>
-constexpr std::uint64_t getMoveIXLowUnsignedValue(std::uint64_t Value) noexcept
+template <uint32_t N, uint64_t Align = 1>
+constexpr uint64_t getMoveIXLowUnsignedValue(uint64_t value) noexcept
 {
   // total size: N + MoveIX imm size (24)
-  constexpr std::uint32_t size = N + 24;
-  constexpr std::uint64_t mask = (1ull << (N - 1ull)) - 1ull;
+  constexpr uint32_t size = N + 24;
+  constexpr uint64_t mask = (1ull << (N - 1ull)) - 1ull;
 
   // sanity checks
-  if(!isUInt<size>(Value)) {
+  if(!isUInt<size>(value)) {
     llvm_unreachable("fixup value out of range");
   }
-  if(Value % Align != 0) {
+  if(value % Align != 0) {
     llvm_unreachable("fixup value bad alignement");
   }
 
-  Value /= Align; // align value
-  return Value & mask;
+  return (value / Align) & mask;
 }
 
-template <std::uint32_t N, std::uint64_t Align = 1>
-std::uint64_t getMoveIXHighUnsignedValue(std::uint64_t Value) noexcept
+template <uint32_t N, uint64_t Align = 1>
+uint64_t getMoveIXHighUnsignedValue(uint64_t value) noexcept
 {
-  constexpr std::uint32_t size = N + 24;
+  constexpr uint32_t size = N + 24;
 
-  if(!isUInt<size>(Value)) {
+  if(!isUInt<size>(value)) {
     llvm_unreachable("fixup value out of range");
   }
-  if(Value % Align != 0) {
+  if(value % Align != 0) {
     llvm_unreachable("fixup value bad alignement");
   }
 
-  Value /= Align; // align value
-  return Value >> N;
+  return (value / Align) >> N;
 }
 
 } // namespace
 
-std::uint64_t
+uint64_t
 AltairXMCAsmBackend::adjustImmValue(MCFixupKind kind,
-                                    std::uint64_t Value) noexcept {
+                                    uint64_t value) noexcept {
 
   switch (static_cast<AltairX::Fixups>(kind)) {
   case AltairX::fixup_altairx_pcrel23lo:
-    return getMoveIXLowSignedValue<23, 4>(Value);
+    return getMoveIXLowSignedValue<23, 4>(value);
   case AltairX::fixup_altairx_pcrel23hi:
-    return getMoveIXHighSignedValue<23, 4>(Value);
+    return getMoveIXHighSignedValue<23, 4>(value);
   case AltairX::fixup_altairx_pcrel24lo:
-    return getMoveIXLowSignedValue<24, 4>(Value);
+    return getMoveIXLowSignedValue<24, 4>(value);
   case AltairX::fixup_altairx_pcrel24hi:
-    return getMoveIXHighSignedValue<24, 4>(Value);
+    return getMoveIXHighSignedValue<24, 4>(value);
   case AltairX::fixup_altairx_abs24lo:
-    return getMoveIXLowUnsignedValue<24, 4>(Value);
+    return getMoveIXLowUnsignedValue<24, 4>(value);
   case AltairX::fixup_altairx_abs24hi:
-    return getMoveIXHighUnsignedValue<24, 4>(Value);
+    return getMoveIXHighUnsignedValue<24, 4>(value);
   case AltairX::fixup_altairx_moveix9lo:
-    return getMoveIXLowSignedValue<9>(Value);
+    return getMoveIXLowSignedValue<9>(value);
   case AltairX::fixup_altairx_moveix9hi:
-    return getMoveIXHighSignedValue<9>(Value);
+    return getMoveIXHighSignedValue<9>(value);
   case AltairX::fixup_altairx_moveix10lo:
-    return getMoveIXLowSignedValue<10>(Value);
+    return getMoveIXLowSignedValue<10>(value);
   case AltairX::fixup_altairx_moveix10hi:
-    return getMoveIXHighSignedValue<10>(Value);
+    return getMoveIXHighSignedValue<10>(value);
   case AltairX::fixup_altairx_moveix18lo:
-    return getMoveIXLowSignedValue<18>(Value);
+    return getMoveIXLowSignedValue<18>(value);
   case AltairX::fixup_altairx_moveix18hi:
-    return getMoveIXHighSignedValue<18>(Value);
+    return getMoveIXHighSignedValue<18>(value);
   default:
     llvm_unreachable("Unknown fixup kind!");
   }
@@ -206,7 +204,7 @@ void AltairXMCAsmBackend::applyFixup(const MCAssembler &Asm,
                                      const MCFixup &Fixup,
                                      const MCValue &Target,
                                      MutableArrayRef<char> Data,
-                                     std::uint64_t Value, bool IsResolved,
+                                     uint64_t Value, bool IsResolved,
                                      const MCSubtargetInfo *STI) const {
   if(!Value) {
     return; // Doesn't change encoding.
@@ -217,17 +215,16 @@ void AltairXMCAsmBackend::applyFixup(const MCAssembler &Asm,
     return;
   }
 
-  MCContext& context = Asm.getContext();
   const auto& info = getFixupKindInfo(Fixup.getKind());
   const auto offset = Fixup.getOffset();
-  constexpr std::uint32_t opcodeSize = 4;
+  constexpr uint32_t opcodeSize = 4;
   assert(offset + opcodeSize <= Data.size() && "Invalid fixup offset!");
 
   auto fixed = AltairXMCAsmBackend::adjustImmValue(kind, Value);
   fixed <<= info.TargetOffset;
   // mask in the bits from the fixup value
-  for (std::uint32_t i{}; i != opcodeSize; ++i) {
-    Data[offset + i] |= static_cast<std::uint8_t>((fixed >> (i * 8)) & 0xFFull);
+  for (uint32_t i{}; i != opcodeSize; ++i) {
+    Data[offset + i] |= static_cast<uint8_t>((fixed >> (i * 8)) & 0xFFull);
   }
 }
 

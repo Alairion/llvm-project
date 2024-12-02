@@ -33,7 +33,7 @@ def AltairX_CRetConv : CallingConv<[
 ]>;
 
 def AltairX_CalleeSavedRegs : CalleeSavedRegs<(add 
-  (sequence "R%u", 9, 20),
+  (sequence "R%u", 9, 19),
   R30, // FP
   R31 // LR
 )>;

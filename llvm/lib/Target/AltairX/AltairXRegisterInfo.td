@@ -42,7 +42,7 @@ foreach i = 1...8 in {
 }
 
 // Non-volatile registers
-foreach i = 9...20 in {
+foreach i = 9...19 in {
   def R#i#b : AltairXRegister<i, "r"#i, "s"#!sub(i, 9)>, DwarfRegNum<[i]>;
   def R#i#w : AltairXRegister<i, "r"#i, "s"#!sub(i, 9), [!cast<Register>("R"#i#"b")], [ISubReg8]>, DwarfRegNum<[i]>;
   def R#i#d : AltairXRegister<i, "r"#i, "s"#!sub(i, 9), [!cast<Register>("R"#i#"w")], [ISubReg16]>, DwarfRegNum<[i]>;
@@ -50,11 +50,11 @@ foreach i = 9...20 in {
 }
 
 // Volatile registers
-foreach i = 21...30 in {
-  def R#i#b : AltairXRegister<i, "r"#i, "t"#!sub(i, 21)>, DwarfRegNum<[i]>;
-  def R#i#w : AltairXRegister<i, "r"#i, "t"#!sub(i, 21), [!cast<Register>("R"#i#"b")], [ISubReg8]>, DwarfRegNum<[i]>;
-  def R#i#d : AltairXRegister<i, "r"#i, "t"#!sub(i, 21), [!cast<Register>("R"#i#"w")], [ISubReg16]>, DwarfRegNum<[i]>;
-  def R#i   : AltairXRegister<i, "r"#i, "t"#!sub(i, 21), [!cast<Register>("R"#i#"d")], [ISubReg32]>, DwarfRegNum<[i]>;
+foreach i = 20...30 in {
+  def R#i#b : AltairXRegister<i, "r"#i, "t"#!sub(i, 20)>, DwarfRegNum<[i]>;
+  def R#i#w : AltairXRegister<i, "r"#i, "t"#!sub(i, 20), [!cast<Register>("R"#i#"b")], [ISubReg8]>, DwarfRegNum<[i]>;
+  def R#i#d : AltairXRegister<i, "r"#i, "t"#!sub(i, 20), [!cast<Register>("R"#i#"w")], [ISubReg16]>, DwarfRegNum<[i]>;
+  def R#i   : AltairXRegister<i, "r"#i, "t"#!sub(i, 20), [!cast<Register>("R"#i#"d")], [ISubReg32]>, DwarfRegNum<[i]>;
 }
 
 // Link register

@@ -36,6 +36,7 @@ public:
                                unsigned OpIdx, unsigned PrintMethodIdx,
                                raw_ostream &OS);
 
+  void printRelBranchTarget(const MCInst* MI, unsigned OpNo, unsigned Value, raw_ostream& O);
   void printCondCode(const MCInst* MI, uint32_t OpIdx, raw_ostream& OS);
   void printBRCPrediction(const MCInst* MI, uint32_t OpIdx, raw_ostream& OS);
   void printSCMPCondCode(const MCInst* MI, uint32_t OpIdx, raw_ostream& OS);

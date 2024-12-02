@@ -86,18 +86,18 @@ namespace {
 
 std::string_view condCodeToString(AltairX::BRCondCode condCode) {
   switch(condCode) {
-  case llvm::AltairX::BRCondCode::NE:
-    return "ne";
   case llvm::AltairX::BRCondCode::EQ:
     return "eq";
+  case llvm::AltairX::BRCondCode::NE:
+    return "ne";
+  case llvm::AltairX::BRCondCode::LTU:
+    return "ltu";
+  case llvm::AltairX::BRCondCode::GEU:
+    return "geu";
   case llvm::AltairX::BRCondCode::LT:
     return "lt";
   case llvm::AltairX::BRCondCode::GE:
     return "ge";
-  case llvm::AltairX::BRCondCode::LTS:
-    return "ls";
-  case llvm::AltairX::BRCondCode::GES:
-    return "ges";
   default:
     llvm_unreachable("Invalid AltairX::CondCode");
     break;
@@ -122,6 +122,11 @@ std::string_view SCMPCondCodeToString(AltairX::SCMPCondCode condCode)
 }
 
 } // namespace
+
+void AltairXInstPrinter::printRelBranchTarget(const MCInst* MI, unsigned OpNo, unsigned Value, raw_ostream& O) {
+    const MCOperand& Op = MI->getOperand(OpNo);
+    Op.getExpr()->print(O, &MAI, true);
+}
 
 void AltairXInstPrinter::printCondCode(const MCInst *MI, uint32_t OpIdx,
                                        raw_ostream &OS) {
