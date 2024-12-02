@@ -854,17 +854,17 @@ AltairX::BRCondCode toAltairXBRCondCode(ISD::CondCode value)
   case ISD::SETUEQ:
     return AltairX::BRCondCode::EQ;
   case ISD::SETUGE:
-    return AltairX::BRCondCode::GE;
+    return AltairX::BRCondCode::GEU;
   case ISD::SETULT:
-    return AltairX::BRCondCode::LT;
+    return AltairX::BRCondCode::LTU;
   case ISD::SETUNE:
     return AltairX::BRCondCode::NE;
   case ISD::SETEQ:
     return AltairX::BRCondCode::EQ;
   case ISD::SETGE:
-    return AltairX::BRCondCode::GES;
+    return AltairX::BRCondCode::GE;
   case ISD::SETLT:
-    return AltairX::BRCondCode::LTS;
+    return AltairX::BRCondCode::LT;
   case ISD::SETNE:
     return AltairX::BRCondCode::NE;
   default:
