@@ -78,15 +78,14 @@ AltairXMCCodeEmitter::getMoveIXOpValue(const MCInst &MI, std::uint32_t OpIdx,
   return 0; // let fixup handle the value when it's known!
 }
 
-std::uint64_t
-AltairXMCCodeEmitter::getBRTargetOpValue(const MCInst &MI, std::uint32_t OpIdx,
-                                         SmallVectorImpl<MCFixup> &Fixups,
-                                         const MCSubtargetInfo &STI) const {
+std::uint64_t AltairXMCCodeEmitter::getRelBranchTargetOpValue(
+    const MCInst &MI, std::uint32_t OpIdx, SmallVectorImpl<MCFixup> &Fixups,
+    const MCSubtargetInfo &STI) const {
   const MCOperand &MO = MI.getOperand(OpIdx);
   return getMachineOpValue(MI, MO, Fixups, STI);
 }
 
-std::uint64_t AltairXMCCodeEmitter::getCallTargetOpValue(
+std::uint64_t AltairXMCCodeEmitter::getAbsBranchTargetOpValue(
     const MCInst &MI, std::uint32_t OpIdx, SmallVectorImpl<MCFixup> &Fixups,
     const MCSubtargetInfo &STI) const {
   const MCOperand &MO = MI.getOperand(OpIdx);

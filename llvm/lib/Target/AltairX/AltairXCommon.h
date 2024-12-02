@@ -10,12 +10,12 @@ namespace llvm::AltairX {
 
 // Natively supported condition codes for BRC
 enum class BRCondCode : std::uint32_t {
-  NE = 0b000,  // Not equal
-  EQ = 0b100,  // Equal
-  LT = 0b010,  // Less
-  GE = 0b110,  // Greater or equal
-  LTS = 0b001, // Less (signed)
-  GES = 0b101, // Greater or equal (signed)
+  EQ = 0b000, // Equal
+  NE = 0b001, // Not equal
+  LT = 0b010, // Less
+  GE = 0b011, // Greater or equal
+  LTU = 0b100,  // Less (unsigned)
+  GEU = 0b101,  // Greater or equal (unsigned)
 };
 
 struct ConditionOperands
@@ -27,18 +27,18 @@ struct ConditionOperands
 
 inline ConditionOperands reverseCondition(const ConditionOperands& operands) noexcept {
   switch (operands.cc) {
+  case BRCondCode::EQ:
+      return {BRCondCode::NE, operands.left, operands.right};
   case BRCondCode::NE:
     return {BRCondCode::EQ, operands.left, operands.right};
-  case BRCondCode::EQ:
-    return {BRCondCode::NE, operands.left, operands.right};
+  case BRCondCode::LTU:
+    return {BRCondCode::LTU, operands.right, operands.left};
+  case BRCondCode::GEU:
+    return {BRCondCode::GEU, operands.right, operands.left};
   case BRCondCode::LT:
-    return {BRCondCode::LT, operands.right, operands.left};
+      return {BRCondCode::LT, operands.right, operands.left};
   case BRCondCode::GE:
-    return {BRCondCode::GE, operands.right, operands.left};
-  case BRCondCode::LTS:
-    return {BRCondCode::LTS, operands.right, operands.left};
-  case BRCondCode::GES:
-    return {BRCondCode::GES, operands.right, operands.left};
+      return {BRCondCode::GE, operands.right, operands.left};
   default:
     llvm_unreachable("Unknown codecode");
   }
