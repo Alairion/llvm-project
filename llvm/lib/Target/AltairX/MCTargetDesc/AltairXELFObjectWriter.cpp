@@ -1,4 +1,4 @@
-//== AltairXELFObjectWriter.cxx  ------------------------------------*- C++ -*-=//
+//== AltairXELFObjectWriter.cxx  ----------------------------------*- C++ -*-=//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,8 +11,8 @@
 
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCValue.h"
 #include "llvm/MC/MCFixup.h"
+#include "llvm/MC/MCValue.h"
 
 namespace llvm {
 
@@ -24,11 +24,11 @@ std::uint32_t AltairXELFObjectWriter::getRelocType(MCContext &Ctx,
                                                    const MCFixup &Fixup,
                                                    bool IsPCRel) const {
   const auto kind = Fixup.getTargetKind();
-  if(kind >= FirstLiteralRelocationKind) {
+  if (kind >= FirstLiteralRelocationKind) {
     return kind - FirstLiteralRelocationKind;
   }
 
-  switch(kind) {
+  switch (kind) {
   case AltairX::fixup_altairx_pcrel23lo:
     return ELF::R_ALTAIRX_PCREL23LO;
   case AltairX::fixup_altairx_pcrel23hi:

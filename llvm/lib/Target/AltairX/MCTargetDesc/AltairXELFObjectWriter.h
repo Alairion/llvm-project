@@ -22,6 +22,6 @@ protected:
                              const MCFixup &Fixup, bool IsPCRel) const override;
 };
 
-}
+} // namespace llvm
 
 #endif

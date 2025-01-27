@@ -1,5 +1,4 @@
-//===-- AltairXRegisterInfo.h - AltairX Register Information Impl -----*- C++
-//-*-===//
+//===-- AltairXRegisterInfo.h - AltairX Register Information Impl --*- C++ -*-//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -54,7 +53,6 @@ public:
 
   static const TargetRegisterClass *intRegClass(unsigned Size);
   static const TargetRegisterClass *MVTRegClass(MVT Type);
-
 
 protected:
   const AltairXSubtarget &Subtarget;

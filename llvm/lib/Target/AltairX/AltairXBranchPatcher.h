@@ -1,7 +1,9 @@
 //===- AltairXBranchPatcher.h - AltairX Register Information Impl --- C++ -===//
+// 
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// 
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_LIB_TARGET_ALTAIRX_BRANCHPATCHER_H
@@ -16,8 +18,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 
-namespace llvm
-{
+namespace llvm {
 
 class MachineBranchProbabilityInfo;
 
@@ -37,21 +38,21 @@ public:
   AltairXBranchPatcher();
   StringRef getPassName() const override { return "AltairX Branch Patcher"; }
 
-  void getAnalysisUsage(AnalysisUsage& AU) const override;
+  void getAnalysisUsage(AnalysisUsage &AU) const override;
   bool runOnMachineFunction(MachineFunction &F) override;
 
   static char ID;
 
 private:
-  void runOnMachineBasicBlock(MachineBasicBlock& MBB);
-  void runOnPseudoBRC(MachineBasicBlock& MBB, MachineInstr& MI);
-  void runOnCMP(MachineBasicBlock& MBB, MachineInstr& MI);
+  void runOnMachineBasicBlock(MachineBasicBlock &MBB);
+  void runOnPseudoBRC(MachineBasicBlock &MBB, MachineInstr &MI);
+  void runOnCMP(MachineBasicBlock &MBB, MachineInstr &MI);
 
-  const TargetMachine* TM{};
-  const AltairXInstrInfo* TII{};
-  const MachineBranchProbabilityInfo* MBPI{};
+  const TargetMachine *TM{};
+  const AltairXInstrInfo *TII{};
+  const MachineBranchProbabilityInfo *MBPI{};
 };
 
-}
+} // namespace llvm
 
 #endif

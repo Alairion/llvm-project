@@ -1,5 +1,4 @@
-//===-- AltairXInstrInfo.h - AltairX Instruction Information ----------*- C++
-//-*-===//
+//===-- AltairXInstrInfo.h - AltairX Instruction Information ----*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -32,15 +31,16 @@ public:
                    const DebugLoc &DL, MCRegister DestReg, MCRegister SrcReg,
                    bool KillSrc) const override;
 
-  bool expandPostRAPseudo(MachineInstr& MI) const override;
+  bool expandPostRAPseudo(MachineInstr &MI) const override;
 
 private:
-  void expandPostRAGlobalAddrValue(MachineInstr& MI) const;
-  void expandPostRARet(MachineInstr& MI) const;
-  void expandPostRAConstantToReg(MachineInstr& MI) const;
+  void expandPostRAGlobalAddrValue(MachineInstr &MI) const;
+  void expandPostRARet(MachineInstr &MI) const;
+  void expandPostRAIndirectCall(MachineInstr &MI) const;
+  void expandPostRAIndirectJump(MachineInstr &MI) const;
+  void expandPostRAConstantToReg(MachineInstr &MI) const;
 
 public:
-
   /*
   MachineInstr* foldMemoryOperandImpl(
     MachineFunction& MF, MachineInstr& MI, ArrayRef<unsigned> Ops,
@@ -76,22 +76,23 @@ public:
                         const DebugLoc &DL,
                         int *BytesAdded = nullptr) const override;
 
-  MachineBasicBlock* getBranchDestBlock(const MachineInstr& MI) const override;
+  MachineBasicBlock *getBranchDestBlock(const MachineInstr &MI) const override;
 
   // Find the last definition of reg before MI
   // Return the *operand* if found, nullptr otherwise.
   // A register may not be defined by an operand.
-  static MachineOperand* getLatestRegDef(MachineInstr& MI, Register reg);
+  static MachineOperand *getLatestRegDef(MachineInstr &MI, Register reg);
 
   static bool isUncondBranchOpcode(const MachineInstr &MI) {
     return MI.getOpcode() == AltairX::BRA;
   }
 
   static bool isCondBranchOpcode(const MachineInstr &MI) {
-    return MI.getOpcode() == AltairX::BRC || MI.getOpcode() == AltairX::PseudoBRC;
+    return MI.getOpcode() == AltairX::BRC ||
+           MI.getOpcode() == AltairX::PseudoBRC;
   }
 
-  static bool isCompare(const MachineInstr& MI) {
+  static bool isCompare(const MachineInstr &MI) {
     return MI.getOpcode() == AltairX::CmpRIb ||
            MI.getOpcode() == AltairX::CmpRIw ||
            MI.getOpcode() == AltairX::CmpRId ||

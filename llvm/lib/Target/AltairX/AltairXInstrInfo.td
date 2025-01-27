@@ -69,6 +69,9 @@ def AltairXGlobalAddrValue : AltairXPseudo<
   "move $ptr, $addr"
 >;
 
+def : Pat<(AltairXGAWRAPPER tjumptable:$addr),
+  (AltairXGlobalAddrValue tjumptable:$addr)>;
+
 //===----------------------------------------------------------------------===//
 // Procedure calling
 //===----------------------------------------------------------------------===//
@@ -134,6 +137,7 @@ def brtarget : Operand<OtherVT> {
   let OperandType = "OPERAND_PCREL";
 }
 
+let isTerminator = 1 in
 def BRA : AltairXInstRelBRA<OPCODE_BRA,
   (outs),
   (ins brtarget:$target),
@@ -144,18 +148,59 @@ def BRA : AltairXInstRelBRA<OPCODE_BRA,
 // Branches (indirect)
 //===----------------------------------------------------------------------===//
 
+// Real instructions:
 // Indirect call, store link address to first operand, and jump to second operand
-// ret is call $zero, $lr
-// Indirect jump is call $zero, rB
-def STD_AltairXindirectcall : SDTypeProfile<1, 1, [SDTCisInt<0>, SDTCisInt<1>]>;
-def AltairXindirectcall : SDNode<"AltairXISD::INDIRECT_CALL", STD_AltairXindirectcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
-
-let isCall = 1 in // not sure about that
-def IndirectCall : AltairXInstIndirectBRA<OPCODE_INDIRECT_CALL,
+let isCall = 1 in
+def IndirectCallLink : AltairXInstIndirectBRA<OPCODE_INDIRECT_CALL,
   (outs GPIReg64:$link),
   (ins GPIReg64:$target),
-  [(set GPIReg64:$link, (AltairXindirectcall GPIReg64:$target))],
+  [], // no default pattern
   "call", "$link, $target">;
+
+// Indirect callr, store link address to first operand, and add second operand to PC
+let isCall = 1 in
+def IndirectCallRelLink : AltairXInstIndirectBRA<OPCODE_INDIRECT_CALL,
+  (outs GPIReg64:$link),
+  (ins GPIReg64:$target),
+  [], // no default pattern
+  "call", "$link, $target">;
+
+// Pseudo instruction for instruction selection!
+def STD_AltairXindirectcall : SDTypeProfile<0, 1, [SDTCisInt<0>]>;
+def AltairXindirectcall : SDNode<"AltairXISD::INDIRECT_CALL", STD_AltairXindirectcall, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+
+// IndirectCall rB is IndirectCallLink r31, rB
+// Simplifies instruction selection
+let Defs = [R31], isCall = 1, isBarrier = 1, isIndirectBranch = 1 in
+def IndirectCall : AltairXPseudo<
+  (outs),
+  (ins GPIReg64:$target),
+  [(AltairXindirectcall GPIReg64:$target)],
+  "call", "$target">;
+
+// Indirect jump to first operand
+def STD_AltairXindirectjump : SDTypeProfile<0, 1, [SDTCisInt<0>]>;
+def AltairXindirectjump : SDNode<"AltairXISD::INDIRECT_JUMP", STD_AltairXindirectjump, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+
+// Indirect jump is call $zero, rB
+let isBarrier = 1, isIndirectBranch = 1, isTerminator = 1 in
+def IndirectJump : AltairXPseudo<
+  (outs),
+  (ins GPIReg64:$target),
+  [(AltairXindirectjump GPIReg64:$target)],
+  "jump", "$target">;
+
+// Indirect jump to first operand
+def STD_AltairXindirectbra : SDTypeProfile<0, 1, [SDTCisInt<0>]>;
+def AltairXindirectbra : SDNode<"AltairXISD::INDIRECT_BRA", STD_AltairXindirectbra, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+
+// Indirect jump is call $zero, rB
+let isBarrier = 1, isIndirectBranch = 1, isTerminator = 1 in
+def IndirectBRA : AltairXPseudo<
+  (outs),
+  (ins GPIReg64:$target),
+  [(AltairXindirectbra GPIReg64:$target)],
+  "bra", "$target">;
 
 //===----------------------------------------------------------------------===//
 // Branches (conditional)
@@ -232,7 +277,7 @@ def BRC : AltairXInstBRC<OPCODE_BRC,
 def STD_AltairXret : SDTypeProfile<0, 0, []>;
 def AltairXret : SDNode<"AltairXISD::RET", STD_AltairXret, [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
-// ret is call $zero, $lr
+// Ret is IndirectCall $zero, $lr
 // use a pseudo instruction to mark it as return
 let Uses = [R31], isReturn = 1, isBarrier = 1, isTerminator = 1, hasCtrlDep = 1 in
 def Ret : AltairXPseudo<(outs), (ins), [(AltairXret)], "ret">;
@@ -333,6 +378,9 @@ def SetFR : AltairXInstCUSetFR<
     [],
     "move", "$ri, $rs1"> {
 }
+
+//def : Pat<(add (i64 addrfi:$addr), s64imm32:$imm),
+//          (AddRIq (i64 addrfi:$addr), s64imm32:$imm)>;
 
 //===----------------------------------------------------------------------===//
 // MDU (mul, div, rem)

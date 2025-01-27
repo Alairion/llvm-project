@@ -1,4 +1,4 @@
-//===-- AltairXMCAsmInfo.cpp - AltairX Asm Properties -------------------------===//
+//===-- AltairXMCAsmInfo.cpp - AltairX Asm Properties ---------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -14,7 +14,7 @@
 
 using namespace llvm;
 
-void AltairXMCAsmInfo::anchor() { }
+void AltairXMCAsmInfo::anchor() {}
 
 AltairXMCAsmInfo::AltairXMCAsmInfo(const Triple &TheTriple) {
   IsLittleEndian = true;

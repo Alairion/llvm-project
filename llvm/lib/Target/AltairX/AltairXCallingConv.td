@@ -14,6 +14,11 @@ def AltairX_CCallingConv : CallingConv<[
   // requirements of each stack slot are
   CCIfByVal<CCPassByVal<8, 8>>,
 
+  /*
+  CCIfType<[i8, i16, i32], CCPromoteToType<i64>>,
+  CCIfType<[i64], CCAssignToReg<[R1]>>
+  */
+
   CCIfType<[i8], CCAssignToReg<[R1b, R2b, R3b, R4b, R5b, R6b, R7b, R8b]>>,
   CCIfType<[i16], CCAssignToReg<[R1w, R2w, R3w, R4w, R5w, R6w, R7w, R8w]>>,
   CCIfType<[i32], CCAssignToReg<[R1d, R2d, R3d, R4d, R5d, R6d, R7d, R8d]>>,
@@ -30,6 +35,11 @@ def AltairX_CRetConv : CallingConv<[
   CCIfType<[i16], CCAssignToReg<[R1w]>>,
   CCIfType<[i32], CCAssignToReg<[R1d]>>,
   CCIfType<[i64], CCAssignToReg<[R1]>>
+
+  /*
+  CCIfType<[i8, i16, i32], CCPromoteToType<i64>>,
+  CCIfType<[i64], CCAssignToReg<[R1]>>
+  */
 ]>;
 
 def AltairX_CalleeSavedRegs : CalleeSavedRegs<(add 

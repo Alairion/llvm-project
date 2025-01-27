@@ -81,12 +81,11 @@ public:
   // Target Fixup Interfaces
   unsigned getNumFixupKinds() const override;
   std::optional<MCFixupKind> getFixupKind(StringRef Name) const override;
-  const MCFixupKindInfo& getFixupKindInfo(MCFixupKind Kind) const override;
+  const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override;
 
   // generate the right imm for instruction according to "kind"
   static std::uint64_t adjustImmValue(MCFixupKind kind,
                                       std::uint64_t Value) noexcept;
-
 
   void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                   const MCValue &Target, MutableArrayRef<char> Data,
@@ -97,8 +96,6 @@ public:
   bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
                             const MCRelaxableFragment *DF,
                             const MCAsmLayout &Layout) const override;
-
-
 
 private:
   const Target &Target;

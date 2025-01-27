@@ -1,5 +1,4 @@
-//===-- AltairXRegisterInfo.cpp - AltairX Register Information
-//----------------===//
+//===-- AltairXRegisterInfo.cpp - AltairX Register Information ------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -14,12 +13,12 @@
 
 #include "AltairXRegisterInfo.h"
 
-#include "llvm/Support/Debug.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/Support/Debug.h"
 
-#include "AltairXSubtarget.h"
 #include "AltairXInstrInfo.h"
+#include "AltairXSubtarget.h"
 
 #define GET_REGINFO_TARGET_DESC
 #include "AltairXGenRegisterInfo.inc"
@@ -36,15 +35,13 @@ AltairXRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   return AltairX_CalleeSavedRegs_SaveList;
 }
 
-const uint32_t*
-AltairXRegisterInfo::getCallPreservedMask(const MachineFunction& MF,
-  CallingConv::ID) const
-{
+const uint32_t *
+AltairXRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
+                                          CallingConv::ID) const {
   return AltairX_CalleeSavedRegs_RegMask;
 }
 
-const TargetRegisterClass *
-AltairXRegisterInfo::intRegClass(unsigned int Size) {
+const TargetRegisterClass *AltairXRegisterInfo::intRegClass(unsigned int Size) {
   switch (Size) {
   case 8:
     return &AltairX::GPIReg8RegClass;
@@ -81,6 +78,30 @@ AltairXRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 
 namespace {
 
+bool isSpill(std::uint32_t opcode) {
+  static constexpr std::array validOpcodes = {
+      AltairX::SPILLb,   AltairX::SPILLw,   AltairX::SPILLd,
+      AltairX::SPILLq,   AltairX::StoreRIb, AltairX::StoreRIw,
+      AltairX::StoreRId, AltairX::StoreRIq};
+  return std::find(validOpcodes.begin(), validOpcodes.end(), opcode) !=
+         validOpcodes.end();
+}
+
+bool isReload(std::uint32_t opcode) {
+  static constexpr std::array validOpcodes = {
+      AltairX::RELOADb,     AltairX::RELOADw,     AltairX::RELOADd,
+      AltairX::RELOADq,     AltairX::LoadRIb,     AltairX::LoadRIw,
+      AltairX::LoadRId,     AltairX::LoadRIq,     AltairX::LoadSExtRIb,
+      AltairX::LoadSExtRIw, AltairX::LoadSExtRId, AltairX::LoadRIbAX16,
+      AltairX::LoadRIbAX32, AltairX::LoadRIbAX64, AltairX::LoadRIwAX32,
+      AltairX::LoadRIwAX64, AltairX::LoadRIdAX64, AltairX::LoadRIbZX16,
+      AltairX::LoadRIbZX32, AltairX::LoadRIbZX64, AltairX::LoadRIwZX32,
+      AltairX::LoadRIwZX64, AltairX::LoadRIdZX64};
+
+  return std::find(validOpcodes.begin(), validOpcodes.end(), opcode) !=
+         validOpcodes.end();
+}
+
 std::uint32_t getSpillStoreRI(std::uint32_t opcode) {
   switch (opcode) {
   case AltairX::SPILLb:
@@ -91,87 +112,63 @@ std::uint32_t getSpillStoreRI(std::uint32_t opcode) {
     return AltairX::StoreRId;
   case AltairX::SPILLq:
     return AltairX::StoreRIq;
-  case AltairX::StoreRIb: [[fallthrough]];
-  case AltairX::StoreRIw: [[fallthrough]];
-  case AltairX::StoreRId: [[fallthrough]];
-  case AltairX::StoreRIq:
+  default:
+    assert(isSpill(opcode) && "Invalid spill instruction");
     return opcode; // return identity for StoreRIs
-  default:
-    llvm_unreachable("Invalid spill instruction");
   }
 }
 
-std::uint32_t getReloadLoadRI(std::uint32_t opcode) {
-  switch (opcode) {
-  case AltairX::RELOADb:
-    return AltairX::LoadRIb;
-  case AltairX::RELOADw:
-    return AltairX::LoadRIw;
-  case AltairX::RELOADd:
-    return AltairX::LoadRId;
-  case AltairX::RELOADq:
-    return AltairX::LoadRIq;
-  case AltairX::LoadRIb: [[fallthrough]];
-  case AltairX::LoadRIw: [[fallthrough]];
-  case AltairX::LoadRId: [[fallthrough]];
-  case AltairX::LoadRIq: [[fallthrough]];
-  case AltairX::LoadSExtRIb: [[fallthrough]];
-  case AltairX::LoadSExtRIw: [[fallthrough]];
-  case AltairX::LoadSExtRId:
-    return opcode; // return identity for LoadRIs
-  default:
-    llvm_unreachable("Invalid reload instruction");
-  }
-}
-
-bool isSpill(std::uint32_t opcode) {
-  return opcode == AltairX::SPILLb || opcode == AltairX::SPILLw ||
-         opcode == AltairX::SPILLd || opcode == AltairX::SPILLq ||
-         opcode == AltairX::StoreRIb || opcode == AltairX::StoreRIw ||
-         opcode == AltairX::StoreRId || opcode == AltairX::StoreRIq;
-}
-
-bool isReload(std::uint32_t opcode) {
-  return opcode == AltairX::RELOADb || opcode == AltairX::RELOADw ||
-         opcode == AltairX::RELOADd || opcode == AltairX::RELOADq ||
-         opcode == AltairX::LoadRIb || opcode == AltairX::LoadRIw ||
-         opcode == AltairX::LoadRId || opcode == AltairX::LoadRIq ||
-         opcode == AltairX::LoadSExtRIb || opcode == AltairX::LoadSExtRIw ||
-         opcode == AltairX::LoadSExtRId;
+std::uint32_t getReloadLoadRI(std::uint32_t opcode)
+{
+    switch(opcode) {
+    case AltairX::RELOADb:
+        return AltairX::LoadRIb;
+    case AltairX::RELOADw:
+        return AltairX::LoadRIw;
+    case AltairX::RELOADd:
+        return AltairX::LoadRId;
+    case AltairX::RELOADq:
+        return AltairX::LoadRIq;
+    default:
+        assert(isReload(opcode) && "Invalid spill instruction");
+        return opcode; // return identity for LoadRIs
+    }
 }
 
 void replaceFrameIndex(MachineBasicBlock::iterator II,
                        const AltairXInstrInfo &TII, Register Reg,
                        Register FrameReg, std::int64_t Offset,
                        std::uint64_t StackSize, RegScavenger *RS, int SPAdj) {
-  //assert(RS && "Need register scavenger.");
+  // assert(RS && "Need register scavenger.");
 
   MachineInstr &MI = *II;
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc DL = MI.getDebugLoc();
   const std::uint32_t opcode = MI.getOpcode();
 
+  if (!isInt<32>(Offset)) {
+     // The real limit for load/store is 33 bits, but it will never be valid
+     // in real application
+     llvm_unreachable("Unsupported offset for spill, reload or frame addr!");
+  }
+
   // Handle StoreRIs too. They may be generated by load on stack args (since
   // they aren't spills)
   if (isSpill(opcode)) {
-    if (!isInt<32>(Offset)) {
-      llvm_unreachable("Unsupported offset for spill");
-    }
-
     BuildMI(MBB, II, DL, TII.get(getSpillStoreRI(opcode)))
         .addReg(Reg, getKillRegState(MI.getOperand(0).isKill()))
         .addReg(FrameReg, 0)
         .addImm(Offset)
         .addMemOperand(*MI.memoperands_begin());
   } else if (isReload(opcode)) {
-    if (!isInt<32>(Offset)) {
-      llvm_unreachable("Unsupported offset for reload");
-    }
-
     BuildMI(MBB, II, DL, TII.get(getReloadLoadRI(opcode)), Reg)
         .addReg(FrameReg, 0)
         .addImm(Offset)
         .addMemOperand(*MI.memoperands_begin());
+  } else if (opcode == AltairX::AddRIq) {
+    BuildMI(MBB, II, DL, TII.get(AltairX::AddRIq), Reg)
+      .addReg(FrameReg, 0)
+      .addImm(Offset);
   } else {
     llvm_unreachable("Unsupported Instruction for frame index elemination");
   }
@@ -186,14 +183,14 @@ bool AltairXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                               int SPAdj, unsigned FIOperandNum,
                                               RegScavenger *RS) const {
   assert(SPAdj == 0 && "Unexpected");
-  MachineInstr& MI = *II;
-  MachineOperand& frameOp = MI.getOperand(FIOperandNum);
+  MachineInstr &MI = *II;
+  MachineOperand &frameOp = MI.getOperand(FIOperandNum);
   const int frameIndex = frameOp.getIndex();
 
-  MachineFunction& MF = *MI.getParent()->getParent();
-  MachineFrameInfo& MFI = MF.getFrameInfo();
-  const auto& TII = *MF.getSubtarget<AltairXSubtarget>().getInstrInfo();
-  //const auto* TFI = getFrameLowering(MF);
+  MachineFunction &MF = *MI.getParent()->getParent();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  const auto &TII = *MF.getSubtarget<AltairXSubtarget>().getInstrInfo();
+  // const auto* TFI = getFrameLowering(MF);
   const std::uint64_t stackSize = MF.getFrameInfo().getStackSize();
   std::int64_t offset = MF.getFrameInfo().getObjectOffset(frameIndex);
   offset += stackSize;
@@ -209,10 +206,10 @@ bool AltairXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   Register reg = MI.getOperand(0).getReg();
 
-  const std::vector<CalleeSavedInfo>& CSI = MFI.getCalleeSavedInfo();
+  const std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
   int minCSFI = 0;
   int maxCSFI = -1;
-  if(!CSI.empty()) {
+  if (!CSI.empty()) {
     minCSFI = CSI.front().getFrameIdx();
     maxCSFI = CSI.back().getFrameIdx();
   }
@@ -225,8 +222,7 @@ bool AltairXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     frameReg = getFrameRegister(MF);
   }
 
-  replaceFrameIndex(II, TII, reg, frameReg, offset, stackSize,
-                    RS, SPAdj);
+  replaceFrameIndex(II, TII, reg, frameReg, offset, stackSize, RS, SPAdj);
 
   return true;
 }
@@ -251,21 +247,11 @@ bool AltairXRegisterInfo::trackLivenessAfterRegAlloc(
   return true;
 }
 
-Register
-AltairXRegisterInfo::getStackRegister() const {
-  return AltairX::R0;
-}
+Register AltairXRegisterInfo::getStackRegister() const { return AltairX::R0; }
 
-Register
-AltairXRegisterInfo::getLinkRegister() const {
-  return AltairX::R31;
-}
+Register AltairXRegisterInfo::getLinkRegister() const { return AltairX::R31; }
 
-Register
-AltairXRegisterInfo::getZeroRegister() const
-{
-  return AltairX::ZERO;
-}
+Register AltairXRegisterInfo::getZeroRegister() const { return AltairX::ZERO; }
 
 Register
 AltairXRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
