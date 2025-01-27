@@ -1,5 +1,4 @@
-//===---- AltairXISelDAGToDAG.h - A Dag to Dag Inst Selector for AltairX
-//------===//
+//===---- AltairXISelDAGToDAG.h - A Dag to Dag Inst Selector for AltairX --===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -34,8 +33,9 @@ public:
 
   bool doesImplicitTruncate(unsigned Opcode) const noexcept;
   bool outputsInMDUReg(unsigned Opcode) const noexcept;
-  bool selectAddr(SDValue N, SDValue &Base, SDValue &Offset, SDValue &Shift) const;
-  bool selectAddrImm(SDValue N, SDValue& Base, SDValue& Offset) const;
+  bool selectAddr(SDValue N, SDValue &Base, SDValue &Offset,
+                  SDValue &Shift) const;
+  bool selectAddrImm(SDValue N, SDValue &Base, SDValue &Offset) const;
 
   void Select(SDNode *Node) override;
 

@@ -1,4 +1,4 @@
-//===-- AltairXMCCodeEmitter.cpp - AltairX Asm Info ------------------------*- C++ -*--===//
+//===-- AltairXMCCodeEmitter.cpp - AltairX Asm Info ------------*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AltairXCommon.h"
 #include "AltairXMCCodeEmitter.h"
+#include "AltairXCommon.h"
 #include "AltairXMCAsmBackend.h"
 
 #include "llvm/MC/MCContext.h"
@@ -27,7 +27,7 @@
 #define GET_INSTRMAP_INFO
 #include "AltairXGenInstrInfo.inc"
 
-//STATISTIC(MCNumFixups, "Number of MC fixups created.");
+// STATISTIC(MCNumFixups, "Number of MC fixups created.");
 
 namespace llvm {
 
@@ -96,7 +96,7 @@ void AltairXMCCodeEmitter::encodeInstruction(const MCInst &Inst,
                                              raw_ostream &OS,
                                              SmallVectorImpl<MCFixup> &Fixups,
                                              const MCSubtargetInfo &STI) const {
-  if(Inst.getOpcode() == AltairX::BUNDLE) {
+  if (Inst.getOpcode() == AltairX::BUNDLE) {
     const MCInst *first = Inst.getOperand(0).getInst();
     assert(first);
     auto firstOpcode = getBinaryCodeForInstr(*first, Fixups, STI);
@@ -111,12 +111,10 @@ void AltairXMCCodeEmitter::encodeInstruction(const MCInst &Inst,
     const auto opcode = getBinaryCodeForInstr(Inst, Fixups, STI);
     OS.write(reinterpret_cast<const char *>(&opcode), 4);
   }
-
 }
 
-MCFixupKind AltairXMCCodeEmitter::getImmFixupFor(const MCInst& MI) const
-{
-  switch(MCII.get(MI.getOpcode()).TSFlags) {
+MCFixupKind AltairXMCCodeEmitter::getImmFixupFor(const MCInst &MI) const {
+  switch (MCII.get(MI.getOpcode()).TSFlags) {
   case AltairX::InstFormatBRURelImm23:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_pcrel23lo);
   case AltairX::InstFormatBRURelImm24:
@@ -135,9 +133,8 @@ MCFixupKind AltairXMCCodeEmitter::getImmFixupFor(const MCInst& MI) const
   }
 }
 
-MCFixupKind AltairXMCCodeEmitter::getMoveIXFixupFor(const MCInst& MI) const
-{
-  switch(MI.getOpcode()) {
+MCFixupKind AltairXMCCodeEmitter::getMoveIXFixupFor(const MCInst &MI) const {
+  switch (MI.getOpcode()) {
   case AltairX::MOVEIX23PCREL:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_pcrel23hi);
   case AltairX::MOVEIX24PCREL:
@@ -156,4 +153,4 @@ MCFixupKind AltairXMCCodeEmitter::getMoveIXFixupFor(const MCInst& MI) const
   }
 }
 
-}
+} // namespace llvm

@@ -1,5 +1,4 @@
-//===-- AltairXISelLowering.cpp - AltairX DAG Lowering Implementation
-//-----------===//
+//===-- AltairXISelLowering.cpp - AltairX DAG Lowering Implementation -----===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AltairXCommon.h"
 #include "AltairXISelLowering.h"
+#include "AltairXCommon.h"
 #include "AltairXSubtarget.h"
 #include "AltairXTargetMachine.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -39,7 +38,10 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
                                              const AltairXSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI) {
 
-  static constexpr std::array<llvm::MVT, 4> AllIntsMVT = {MVT::i8, MVT::i16, MVT::i32, MVT::i64};
+  static constexpr std::array<llvm::MVT, 4> SmallIntsMVT = {MVT::i8, MVT::i16,
+                                                            MVT::i32};
+  static constexpr std::array<llvm::MVT, 4> AllIntsMVT = {MVT::i8, MVT::i16,
+                                                          MVT::i32, MVT::i64};
 
   // Set up the register classes
   addRegisterClass(MVT::i8, &AltairX::GPIReg8RegClass);
@@ -53,7 +55,7 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
 
   // setStackPointerRegisterToSaveRestore(AltairX::X2);
   setSchedulingPreference(Sched::Hybrid);
-  
+
   // Use i32 for setcc operations results (slt, sgt, ...).
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
@@ -62,15 +64,22 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::GlobalAddress, MVT::i64, LegalizeAction::Custom);
   setOperationAction(ISD::BlockAddress, MVT::i64, LegalizeAction::Custom);
   setOperationAction(ISD::ConstantPool, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::Constant, AllIntsMVT, LegalizeAction::Legal);
 
-  // Decompose BR_CC in SETCC + BRCOND to later generate a cmp + bx
   setOperationAction(ISD::BR_CC, AllIntsMVT, LegalizeAction::Custom);
-  setOperationAction(ISD::BRCOND, MVT::Other, Custom);
+  setOperationAction(ISD::BR_JT, MVT::Other, LegalizeAction::Expand);
+  setOperationAction(ISD::JumpTable, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::BRCOND, MVT::Other, LegalizeAction::Custom);
+  setOperationAction(ISD::BRIND, MVT::Other, LegalizeAction::Custom);
   setOperationAction(ISD::SETCC, MVT::i1, LegalizeAction::Promote);
   setOperationAction(ISD::SETCC, AllIntsMVT, LegalizeAction::Custom);
   setOperationAction(ISD::SELECT_CC, AllIntsMVT, LegalizeAction::Custom);
 
-  setOperationAction(ISD::Constant, AllIntsMVT, LegalizeAction::Legal);
+  setOperationAction(ISD::VASTART, MVT::Other, Custom);
+  setOperationAction(ISD::VAEND, MVT::Other, Expand);
+  setOperationAction(ISD::VAARG, SmallIntsMVT, Promote);
+  setOperationAction(ISD::VAARG, MVT::Other, Expand);
+  setOperationAction(ISD::VACOPY, MVT::Other, Expand);
 
   // Set minimum and preferred function alignment, and loop alignment (log2)
   setMinFunctionAlignment(Align{1});
@@ -79,12 +88,11 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
 }
 
 SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
-  SelectionDAG& DAG) const
-{
+                                              SelectionDAG &DAG) const {
   LLVM_DEBUG(dbgs() << "Lowering: ");
   LLVM_DEBUG(Op.dump());
 
-  switch(Op.getOpcode()) {
+  switch (Op.getOpcode()) {
   case ISD::GlobalAddress:
     return LowerGlobalAddress(Op, DAG);
   case ISD::ConstantPool:
@@ -101,6 +109,12 @@ SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
     return LowerBRCOND(Op, DAG);
   case ISD::BR_CC:
     return LowerBR_CC(Op, DAG);
+  case ISD::BRIND:
+    return LowerBRIND(Op, DAG);
+  case ISD::JumpTable:
+    return LowerJumpTable(Op, DAG);
+  case ISD::VASTART:
+    return LowerVASTART(Op, DAG);
   default:
     llvm_unreachable("unimplemented operand");
   }
@@ -118,6 +132,10 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AltairXISD::Jump";
   case AltairXISD::INDIRECT_CALL:
     return "AltairXISD::IndirectCall";
+  case AltairXISD::INDIRECT_JUMP:
+    return "AltairXISD::IndirectJump";
+  case AltairXISD::INDIRECT_BRA:
+    return "AltairXISD::IndirectBRA";
   case AltairXISD::CMP:
     return "AltairXISD::Cmp";
   case AltairXISD::BRCOND:
@@ -133,9 +151,80 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
   }
 }
 
-//===----------------------------------------------------------------------===//
-//@            Formal Arguments Calling Convention Implementation
-//===----------------------------------------------------------------------===//
+namespace
+{
+    
+SDValue toValVT(SelectionDAG &DAG, SDValue Value, const CCValAssign &VA,
+                const SDLoc &DL) {
+  // If this is an 8, 16 or 32 bits value, it is received as a 64 bits int.
+  // Insert an assert[sz]ext to capture this, then truncate.
+  switch (VA.getLocInfo()) {
+  case CCValAssign::Full:
+    return Value; // identity
+  case CCValAssign::BCvt:
+    return DAG.getNode(ISD::BITCAST, DL, VA.getValVT(), Value);
+  // case CCValAssign::SExt:
+  //   arg = DAG.getNode(ISD::AssertSext, DL, type, arg,
+  //                     DAG.getValueType(VA.getValVT()));
+  //   return DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), arg);
+  // case CCValAssign::ZExt:
+  //   arg = DAG.getNode(ISD::AssertZext, DL, type, arg,
+  //                     DAG.getValueType(VA.getValVT()));
+  //   return DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), arg);
+  // case CCValAssign::AExt:
+  //   return DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), arg);
+  default:
+    llvm_unreachable("Unknown location info");
+  }
+}
+
+SDValue lowerFromRegLoc(SelectionDAG &DAG, SDValue Chain, const CCValAssign &VA,
+                        const SDLoc &DL) {
+  assert(VA.isRegLoc() && "lowerFromRegLoc called with non reg loc");
+  if (VA.needsCustom()) {
+    llvm_unreachable("Custom val not supported by Args Lowering");
+  }
+
+  const MVT type = VA.getLocVT();
+  const auto *regClass = AltairXRegisterInfo::MVTRegClass(type);
+  if (!regClass) {
+    llvm_unreachable("Invalid MTV for argument");
+  }
+
+  MachineFunction &MF = DAG.getMachineFunction();
+  // Transform the arguments in physical registers into virtual ones.
+  const auto reg = MF.addLiveIn(VA.getLocReg(), regClass);
+  SDValue arg = DAG.getCopyFromReg(Chain, DL, reg, type);
+  return toValVT(DAG, arg, VA, DL);
+}
+
+// The caller is responsible for loading the full value if the argument is
+// passed with CCValAssign::Indirect.
+SDValue lowerFromMemLoc(SelectionDAG &DAG, SDValue Chain, const CCValAssign &VA,
+                        const SDLoc &DL) {
+  switch (VA.getLocInfo()) {
+  default:
+    llvm_unreachable("Unexpected CCValAssign::LocInfo");
+  case CCValAssign::Full:
+  //case CCValAssign::Indirect:
+  case CCValAssign::BCvt:
+    break;
+  }
+
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  EVT type = VA.getValVT();
+
+  int index = MFI.CreateFixedObject(type.getStoreSize(), VA.getLocMemOffset(), true);
+  SDValue frameIndex = DAG.getFrameIndex(index, MVT::i64);
+
+  return DAG.getExtLoad(ISD::NON_EXTLOAD, DL, VA.getLocVT(), Chain, frameIndex,
+                        MachinePointerInfo::getFixedStack(MF, index), type);
+}
+
+}
+
+static int VarArgsFrameIndex = 0;
 
 /// LowerFormalArguments - transform physical registers into virtual registers
 /// and generate load operations for arguments places on the stack.
@@ -152,111 +241,79 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
          "Unsupported CallingConv to FORMAL_ARGS");
 
   MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo &MFI = MF.getFrameInfo();
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign> argLocs;
-  CCState CCInfo{CallConv, IsVarArg, DAG.getMachineFunction(), argLocs,
-                 *DAG.getContext()};
+  CCState CCInfo{CallConv, IsVarArg, MF, argLocs, *DAG.getContext()};
   CCInfo.AnalyzeFormalArguments(Ins, AltairX_CCallingConv);
+
+  // Used with varargs to acumulate store chains.
+  std::vector<SDValue> OutChains;
+  if (IsVarArg && MF.getFrameInfo().hasVAStart()) {
+    ArrayRef<MCPhysReg> ArgRegs = ArrayRef(GPRArgRegs);
+    unsigned Idx = CCInfo.getFirstUnallocated(ArgRegs);
+    const TargetRegisterClass *RC = &AltairX::GPIReg64RegClass;
+    constexpr int64_t GRLenInBytes = 8;
+    MachineFrameInfo &MFI = MF.getFrameInfo();
+    MachineRegisterInfo &RegInfo = MF.getRegInfo();
   
-  // Calculate the amount of stack space that we need to allocate to store
-  // byval and variadic arguments that are passed in registers.
-  // We need to know this before we allocate the first byval or variadic
-  // argument, as they will be allocated a stack slot below the CFA (Canonical
-  // Frame Address, the stack pointer at entry to the function).
-  unsigned int argRegBegin = AltairX::R1;
-  for (CCValAssign& val : argLocs) {
-    if (CCInfo.getInRegsParamsProcessed() >= CCInfo.getInRegsParamsCount()) {
-      break;
-    }
-
-    if (!Ins[val.getValNo()].Flags.isByVal()) {
-      continue;
-    }
-
-    assert(val.isMemLoc() && "unexpected byval pointer in reg");
-
-    unsigned int begin{};
-    unsigned int end{};
-    CCInfo.getInRegsParamInfo(CCInfo.getInRegsParamsProcessed(), begin, end);
-
-    argRegBegin = std::min(argRegBegin, begin);
-    CCInfo.nextInRegsParam();
-  }
-  CCInfo.rewindByValRegsInfo();
+    // Offset of the first variable argument from stack pointer, and size of
+    // the vararg save area. For now, the varargs save area is either zero or
+    // large enough to hold a0-a7.
+    int VaArgOffset, VarArgsSaveSize;
   
-  if (IsVarArg && MFI.hasVAStart()) {
-    const auto reg = CCInfo.getFirstUnallocated(GPRArgRegs);
-    if (reg != std::size(GPRArgRegs)) {
-      argRegBegin = std::min(argRegBegin, static_cast<unsigned int>(GPRArgRegs[reg]));
+    // If all registers are allocated, then all varargs must be passed on the
+    // stack and we don't need to save any argregs.
+    if (ArgRegs.size() == Idx) {
+      VaArgOffset = CCInfo.getStackSize();
+      VarArgsSaveSize = 0;
+    } else {
+      VarArgsSaveSize = GRLenInBytes * (ArgRegs.size() - Idx);
+      VaArgOffset = -VarArgsSaveSize;
+    }
+  
+    // Record the frame index of the first variable argument
+    // which is a value necessary to VASTART.
+    VarArgsFrameIndex = MFI.CreateFixedObject(GRLenInBytes, VaArgOffset, true);
+
+    // Copy the integer registers that may have been used for passing varargs
+    // to the vararg save area.
+    for (unsigned I = Idx; I < ArgRegs.size();
+         ++I, VaArgOffset += GRLenInBytes) {
+      const Register Reg = RegInfo.createVirtualRegister(RC);
+      RegInfo.addLiveIn(ArgRegs[I], Reg);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, MVT::i64);
+      int FI = MFI.CreateFixedObject(GRLenInBytes, VaArgOffset, true);
+      SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
+                                   MachinePointerInfo::getFixedStack(MF, FI));
+      cast<StoreSDNode>(Store.getNode())
+          ->getMemOperand()
+          ->setValue((Value *)nullptr);
+      OutChains.push_back(Store);
     }
   }
 
   auto origArg = MF.getFunction().arg_begin();
-  for (CCValAssign& VA : argLocs) {
-    unsigned int argIdx{};
-    if (Ins[VA.getValNo()].isOrigArg()) {
-      std::advance(origArg, Ins[VA.getValNo()].getOrigArgIndex() - argIdx);
-      argIdx = Ins[VA.getValNo()].getOrigArgIndex();
-    }
-
-    // Arguments stored in registers.
+  for (CCValAssign &VA : argLocs) {
     if (VA.isRegLoc()) {
-      if(VA.needsCustom()) {
-        llvm_unreachable("Custom val not supported by Args Lowering");
-      }
-
-      const MVT type = VA.getLocVT();
-      const auto* RC = AltairXRegisterInfo::MVTRegClass(type);
-      if(!RC) {
-        llvm_unreachable("Invalid MTV for argument");
-      }
-
-      // Transform the arguments in physical registers into virtual ones.
-      const auto reg = MF.addLiveIn(VA.getLocReg(), RC);
-      SDValue arg = DAG.getCopyFromReg(Chain, DL, reg, type);
-
-      // If this is an 8, 16 or 32 bits value, it is received as a 64 bits int.
-      // Insert an assert[sz]ext to capture this, then
-      // truncate to the right size.
-      switch (VA.getLocInfo()) {
-      case CCValAssign::Full:
-        break;
-      case CCValAssign::BCvt:
-        arg = DAG.getNode(ISD::BITCAST, DL, VA.getValVT(), arg);
-        break;
-      case CCValAssign::SExt:
-        arg = DAG.getNode(ISD::AssertSext, DL, type, arg,
-                          DAG.getValueType(VA.getValVT()));
-        arg = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), arg);
-        break;
-      case CCValAssign::ZExt:
-        arg = DAG.getNode(ISD::AssertZext, DL, type, arg,
-                          DAG.getValueType(VA.getValVT()));
-        arg = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), arg);
-        break;
-      case CCValAssign::AExt:
-        arg = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), arg);
-        break;
-      default:
-        llvm_unreachable("Unknown location info");
-      }
-
-      InVals.push_back(arg);
+      InVals.push_back(lowerFromRegLoc(DAG, Chain, VA, DL));
     } else {
-      // sanity check
       assert(VA.isMemLoc());
-      assert(VA.getValVT() != MVT::i64 && "i64 should already be lowered");
+      // assert(VA.getValVT() != MVT::i64 && "i64 should already be lowered");
+      InVals.push_back(lowerFromMemLoc(DAG, Chain, VA, DL));
     }
+  }  
+  
+  // All stores are grouped in one node to allow the matching between
+  // the size of Ins and InVals. This only happens for vararg functions.
+  if(!OutChains.empty()) {
+      OutChains.push_back(Chain);
+      Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, OutChains);
   }
 
   return Chain;
 }
-
-//===----------------------------------------------------------------------===//
-//@              Return Value Calling Convention Implementation
-//===----------------------------------------------------------------------===//
 
 bool AltairXTargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool isVarArg,
@@ -264,15 +321,6 @@ bool AltairXTargetLowering::CanLowerReturn(
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, MF, RVLocs, Context);
   return CCInfo.CheckReturn(Outs, AltairX_CRetConv);
-}
-
-/// LowerMemOpCallTo - Store the argument to the stack.
-SDValue AltairXTargetLowering::LowerMemOpCallTo(SDValue Chain, SDValue Arg,
-                                                const SDLoc &dl,
-                                                SelectionDAG &DAG,
-                                                const CCValAssign &VA,
-                                                ISD::ArgFlagsTy Flags) const {
-  llvm_unreachable("Cannot store arguments to stack");
 }
 
 /// LowerCallResult - Lower the result values of a call into the
@@ -321,7 +369,7 @@ SDValue LowerCallResult(SDValue Chain, SDValue Glue,
   return Chain;
 }
 
-}
+} // namespace
 
 SDValue
 AltairXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
@@ -441,8 +489,9 @@ AltairXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     ops.push_back(glue);
   }
 
-  CLI.Chain = DAG.getNode(isDirect ? AltairXISD::CALL : AltairXISD::JUMP, DL,
-                          NodeTys, ops);
+  CLI.Chain =
+      DAG.getNode(isDirect ? AltairXISD::CALL : AltairXISD::INDIRECT_CALL, DL,
+                  NodeTys, ops);
   glue = CLI.Chain.getValue(1);
 
   // Create the CALLSEQ_END node.
@@ -462,7 +511,7 @@ AltairXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 /// on the stack.  Remember the next parameter register to allocate,
 /// and then confiscate the rest of the parameter registers to insure
 /// this.
-void AltairXTargetLowering::HandleByVal(CCState *State, unsigned int& Size,
+void AltairXTargetLowering::HandleByVal(CCState *State, unsigned int &Size,
                                         Align Align) const {
   /*
 // Byval (as with any stack) slots are always at least 4 byte aligned.
@@ -524,7 +573,7 @@ AltairXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   // Analyze outgoing return values.
   SmallVector<CCValAssign> retLocs;
   CCState CCInfo{CallConv, IsVarArg, DAG.getMachineFunction(), retLocs,
-    *DAG.getContext()};
+                 *DAG.getContext()};
 
   CCInfo.AnalyzeReturn(Outs, AltairX_CRetConv);
 
@@ -561,7 +610,7 @@ AltairXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   // Update chain and glue.
   retOps[0] = Chain;
-  if(flag.getNode()) {
+  if (flag.getNode()) {
     retOps.push_back(flag);
   }
 
@@ -575,7 +624,7 @@ SDValue AltairXTargetLowering::getGlobalAddressWrapper(
 
 EVT AltairXTargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
                                               EVT VT) const {
-  if(VT.isVector()) {
+  if (VT.isVector()) {
     llvm_unreachable("no bool vec for now!");
   }
   // booleans are i8
@@ -584,17 +633,18 @@ EVT AltairXTargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
 
 SDValue AltairXTargetLowering::LowerGlobalAddress(SDValue Op,
                                                   SelectionDAG &DAG) const {
-  const GlobalAddressSDNode* global = cast<GlobalAddressSDNode>(Op);
-  const GlobalValue* value = global->getGlobal();
+  const GlobalAddressSDNode *global = cast<GlobalAddressSDNode>(Op);
+  const GlobalValue *value = global->getGlobal();
   const auto type = Op.getValueType();
 
   SDLoc DL{global};
-  SDValue addr = DAG.getTargetGlobalAddress(value, DL, type, global->getOffset());
+  SDValue addr =
+      DAG.getTargetGlobalAddress(value, DL, type, global->getOffset());
   SDValue wrap = DAG.getNode(AltairXISD::GAWRAPPER, DL, type, addr);
 
+  // return DAG.getLoad(type, DL, DAG.getEntryNode(), wrap,
+  //                    MachinePointerInfo::getGOT(DAG.getMachineFunction()));
   return wrap;
-  //return DAG.getLoad(type, DL, DAG.getEntryNode(), wrap,
-  //                   MachinePointerInfo::getGOT(DAG.getMachineFunction()));
 }
 
 SDValue AltairXTargetLowering::LowerConstantPool(SDValue Op,
@@ -653,10 +703,9 @@ std::optional<SDValue> MatchesSBit(SelectionDAG &DAG, SDLoc dl,
   return std::nullopt;
 }
 
-struct SETCCOperands
-{
-  SDValue& left;
-  SDValue& right;
+struct SETCCOperands {
+  SDValue &left;
+  SDValue &right;
   ISD::CondCode cc{};
   bool needFlip{}; // true if "xor 1" must be added
 };
@@ -723,7 +772,7 @@ SDValue AltairXTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 
   // generic case
   auto operands = computeSETCCOperands(left, right, cc);
-  if(!operands) { // natively supported
+  if (!operands) { // natively supported
     return Op;
   }
 
@@ -742,21 +791,18 @@ SDValue AltairXTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 
 namespace {
 
-struct SelectSetCCOperands
-{
-  SDValue& left;
-  SDValue& right;
+struct SelectSetCCOperands {
+  SDValue &left;
+  SDValue &right;
   ISD::CondCode cc{};
 };
 
-struct SelectCMoveOperands
-{
-  SDValue& trueVal;
-  SDValue& falseVal;
+struct SelectCMoveOperands {
+  SDValue &trueVal;
+  SDValue &falseVal;
 };
 
-struct SelectCCOperands
-{
+struct SelectCCOperands {
   SelectSetCCOperands setcc;
   SelectCMoveOperands cmove;
 };
@@ -845,12 +891,10 @@ SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
                      cmoveOps.falseVal, setcc, cmoveOps.trueVal);
 }
 
-namespace
-{
+namespace {
 
-AltairX::BRCondCode toAltairXBRCondCode(ISD::CondCode value)
-{
-  switch(value) {
+AltairX::BRCondCode toAltairXBRCondCode(ISD::CondCode value) {
+  switch (value) {
   case ISD::SETUEQ:
     return AltairX::BRCondCode::EQ;
   case ISD::SETUGE:
@@ -868,8 +912,8 @@ AltairX::BRCondCode toAltairXBRCondCode(ISD::CondCode value)
   case ISD::SETNE:
     return AltairX::BRCondCode::NE;
   default:
-    llvm_unreachable("Unsupported ISD::CondCode. AltairX only supports ==, !=, "
-      "< and >= predicates.");
+    llvm_unreachable("Unsupported ISD::CondCode."
+                     "AltairX only supports ==, !=, < and >= predicates.");
     break;
   }
 }
@@ -911,3 +955,34 @@ SDValue AltairXTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
                      cmp);
 }
 
+SDValue AltairXTargetLowering::LowerBRIND(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc dl{Op};
+  SDValue chain = Op.getOperand(0);
+  SDValue dest = Op.getOperand(1);
+
+  return DAG.getNode(AltairXISD::INDIRECT_JUMP, dl, MVT::Other, chain, dest);
+}
+
+SDValue AltairXTargetLowering::LowerJumpTable(SDValue Op,
+                                              SelectionDAG &DAG) const {
+  auto *table = cast<JumpTableSDNode>(Op);
+  SDValue addr = DAG.getTargetJumpTable(table->getIndex(), MVT::i64);
+
+  return DAG.getNode(AltairXISD::GAWRAPPER, SDLoc{Op}, MVT::i64, addr);
+}
+
+SDValue AltairXTargetLowering::LowerVASTART(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+
+  SDLoc DL(Op);
+  SDValue FI =
+      DAG.getFrameIndex(VarArgsFrameIndex, getPointerTy(MF.getDataLayout()));
+
+  // vastart just stores the address of the VarArgsFrameIndex slot into the
+  // memory location argument.
+
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
+                      MachinePointerInfo(SV));
+}

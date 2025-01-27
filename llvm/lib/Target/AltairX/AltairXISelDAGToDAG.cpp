@@ -1,5 +1,4 @@
-//===-- AltairXISelDAGToDAG.cpp - A Dag to Dag Inst Selector for AltairX
-//------===//
+//===-- AltairXISelDAGToDAG.cpp - A Dag to Dag Inst Selector for AltairX --===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -39,40 +38,39 @@ bool AltairXDAGToDAGISel::outputsInMDUReg(unsigned Opcode) const noexcept {
          Opcode == ISD::SDIVREM || Opcode == ISD::UDIVREM;
 }
 
-namespace
-{
+namespace {
 
 std::optional<std::uint64_t> selectAddrRRShift(SDValue N) {
-  if(N.getOpcode() != ISD::SHL) {
+  if (N.getOpcode() != ISD::SHL) {
     return std::nullopt; // Not a shift
   }
 
   // can only shift by a constant <= 7
-  auto* constant = dyn_cast<ConstantSDNode>(N.getOperand(1));
-  if(!constant || !isUInt<3>(constant->getZExtValue())) {
+  auto *constant = dyn_cast<ConstantSDNode>(N.getOperand(1));
+  if (!constant || !isUInt<3>(constant->getZExtValue())) {
     return std::nullopt;
   }
 
   return std::make_optional(constant->getZExtValue());
 }
 
-}
+} // namespace
 
-bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
-                                     SDValue &Offset, SDValue &Shift) const {
+bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base, SDValue &Offset,
+                                     SDValue &Shift) const {
 
   // Check if this particular node is reused in any non-memory related
   // operation.  If yes, do not try to fold this node into the address
   // computation, since the computation will be kept.
-  //const SDNode* Node = N.getNode();
-  //for(SDNode* UI : Node->uses()) {
+  // const SDNode* Node = N.getNode();
+  // for(SDNode* UI : Node->uses()) {
   //  if(!isa<MemSDNode>(*UI))
   //    return false;
   //}
 
   SDLoc DL{N};
 
-  if(N.getOpcode() != ISD::ADD) {
+  if (N.getOpcode() != ISD::ADD) {
     return false;
   }
 
@@ -80,14 +78,14 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
   SDValue right = N.getOperand(1);
 
   // Try to match a shift on left and right
-  if(auto matchedShift = selectAddrRRShift(right); matchedShift) {
+  if (auto matchedShift = selectAddrRRShift(right); matchedShift) {
     Base = left;
     Offset = right.getOperand(0);
     Shift = CurDAG->getTargetConstant(*matchedShift, DL, MVT::i64);
     return true;
   }
 
-  if(auto matchedShift = selectAddrRRShift(left); matchedShift) {
+  if (auto matchedShift = selectAddrRRShift(left); matchedShift) {
     Base = right;
     Offset = left.getOperand(0);
     Shift = CurDAG->getTargetConstant(*matchedShift, DL, MVT::i64);
@@ -95,7 +93,7 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base,
   }
 
   // Try to match Reg + Reg
-  if(!isa<ConstantSDNode>(right)) {
+  if (!isa<ConstantSDNode>(right)) {
     Base = left;
     Offset = right;
     Shift = CurDAG->getTargetConstant(0, DL, MVT::i64);
@@ -110,14 +108,14 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
   // Load at given address directly
   SDLoc DL{N};
 
-  if(N.getOpcode() == ISD::FrameIndex) {
-    auto* node = cast<FrameIndexSDNode>(N);
+  if (N.getOpcode() == ISD::FrameIndex) {
+    auto *node = cast<FrameIndexSDNode>(N);
     Base = CurDAG->getTargetFrameIndex(node->getIndex(), MVT::i64);
     Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
     return true;
   }
 
-  if(N.getOpcode() == AltairXISD::GAWRAPPER) {
+  if (N.getOpcode() == AltairXISD::GAWRAPPER) {
     Base = CurDAG->getRegister(AltairX::ZERO, MVT::i64);
     Offset = N.getOperand(0);
     return true;
@@ -132,18 +130,18 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
   auto left = N.getOperand(0);
   auto right = N.getOperand(1);
 
-  if(auto* value = dyn_cast<ConstantSDNode>(right); value) {
+  if (auto *value = dyn_cast<ConstantSDNode>(right); value) {
     const auto constval = value->getSExtValue();
-    if(isInt<32>(constval)) {
+    if (isInt<32>(constval)) {
       Base = left;
       Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
       return true;
     }
   }
 
-  if(auto* value = dyn_cast<ConstantSDNode>(left); value) {
+  if (auto *value = dyn_cast<ConstantSDNode>(left); value) {
     const auto constval = value->getSExtValue();
-    if(isInt<32>(constval)) {
+    if (isInt<32>(constval)) {
       Base = right;
       Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
       return true;
@@ -162,12 +160,23 @@ void AltairXDAGToDAGISel::Select(SDNode *Node) {
     return;
   }
 
+  SDLoc dl{Node};
+
   // Instruction Selection not handled by the auto-generated tablegen selection
   // should be handled here.
-  //switch (Node->getOpcode()) {
-  //default:
-  //  break;
-  //}
+  switch (Node->getOpcode()) {
+  case ISD::FrameIndex: {
+    // Will later become add rX, r0, imm
+    SDValue imm = CurDAG->getTargetConstant(0, dl, MVT::i64);
+    SDValue fi = CurDAG->getTargetFrameIndex(
+        cast<FrameIndexSDNode>(Node)->getIndex(), MVT::i64);
+    ReplaceNode(Node,
+                CurDAG->getMachineNode(AltairX::AddRIq, dl, MVT::i64, fi, imm));
+    return;
+  }
+  default:
+    break;
+  }
 
   // Select the default instruction
   SelectCode(Node);

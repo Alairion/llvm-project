@@ -1,19 +1,19 @@
 //===- AltairXBranchPatcher.cxx - AltairX Register Information Impl - C++ -===//
-// 
+//
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// 
+//
 //===----------------------------------------------------------------------===//
-// 
+//
 // This file contains the AltairX implementation of the TargetRegisterInfo
 // class.
-// 
+//
 //===----------------------------------------------------------------------===//
 
 #include "AltairXBranchPatcher.h"
-#include "AltairXSubtarget.h"
 #include "AltairXCommon.h"
+#include "AltairXSubtarget.h"
 
 #include "llvm/CodeGen/MachineBranchProbabilityInfo.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -22,8 +22,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/InitializePasses.h"
 
-namespace llvm
-{
+namespace llvm {
 
 char AltairXBranchPatcher::ID = 0;
 
@@ -49,7 +48,7 @@ void AltairXBranchPatcher::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 bool AltairXBranchPatcher::runOnMachineFunction(MachineFunction &F) {
-  TM = &F.getTarget(); 
+  TM = &F.getTarget();
   TII = F.getSubtarget<AltairXSubtarget>().getInstrInfo();
   MBPI = &getAnalysis<MachineBranchProbabilityInfo>();
 
@@ -62,7 +61,7 @@ bool AltairXBranchPatcher::runOnMachineFunction(MachineFunction &F) {
 
 void AltairXBranchPatcher::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
   auto last = MBB.getLastNonDebugInstr();
-  if(last == MBB.end()) {
+  if (last == MBB.end()) {
     return; // empty block (always fallthrough)
   }
 
@@ -144,28 +143,29 @@ void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &MBB,
   assert(cmpIt != rend && "BRC without CMP");
   MachineInstr *cmpInst = to_address(cmpIt);
   if (swapCMPOps) {
-    const auto opcode = TII->get(cmpInst->getOpcode());
-    auto *newCmp = BuildMI(MBB, *cmpInst, cmpInst->getDebugLoc(), opcode)
+    auto *newCmp = BuildMI(MBB, *cmpInst, cmpInst->getDebugLoc(),
+                           TII->get(cmpInst->getOpcode()))
                        .addReg(cmpInst->getOperand(1).getReg())
                        .addReg(cmpInst->getOperand(0).getReg())
                        .getInstr();
-    cmpInst->removeFromParent();
+    cmpInst->eraseFromParent();
     cmpInst = newCmp;
   }
 
   runOnCMP(MBB, *cmpInst);
 
-  auto* target = MI.getOperand(0).getMBB();
+  auto *target = MI.getOperand(0).getMBB();
   const auto probability = MBPI->getEdgeProbability(&MBB, target);
   // Set prediction bit if probability >= 50%
-  const bool likely = probability.getNumerator() >= probability.getDenominator() / 2u;
+  const bool likely =
+      probability.getNumerator() >= probability.getDenominator() / 2u;
 
   BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AltairX::BRC))
-    .addMBB(target)
-    .addImm(static_cast<int64_t>(nativeCC))
-    .addImm(static_cast<int64_t>(likely));
+      .addMBB(target)
+      .addImm(static_cast<int64_t>(nativeCC))
+      .addImm(static_cast<int64_t>(likely));
 
-  MI.removeFromParent();
+  MI.eraseFromParent();
 }
 
 namespace {
@@ -185,20 +185,20 @@ uint32_t getCmpImmVersion(uint32_t opcode) {
   }
 }
 
-}
+} // namespace
 
 void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &MBB, MachineInstr &MI) {
   const auto reg = MI.getOperand(1).getReg();
   const auto killing = MI.getOperand(1).isKill();
 
-  MachineOperand* operand = AltairXInstrInfo::getLatestRegDef(MI, reg);
-  if(!operand) {
+  MachineOperand *operand = AltairXInstrInfo::getLatestRegDef(MI, reg);
+  if (!operand) {
     return;
   }
-  MachineInstr* definition = operand->getParent();
+  MachineInstr *definition = operand->getParent();
 
   // Check if definition is a MoveI
-  switch(definition->getOpcode()) {
+  switch (definition->getOpcode()) {
   case AltairX::MoveIb:
     [[fallthrough]];
   case AltairX::MoveIw:
@@ -221,10 +221,11 @@ void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &MBB, MachineInstr &MI) {
       .addReg(MI.getOperand(0).getReg())
       .addImm(imm);
 
-  if(killing) {
-    definition->removeFromParent();
+  if (killing) {
+    definition->eraseFromParent();
   }
-  MI.removeFromParent();
+
+  MI.eraseFromParent();
 }
 
 } // namespace llvm

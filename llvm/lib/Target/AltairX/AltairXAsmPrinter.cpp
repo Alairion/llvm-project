@@ -51,7 +51,7 @@ public:
                                    const MachineInstr *MI);
 
   // Emit a bundle or a single instruction to associated streamer
-  void emitInstruction(const MachineInstr* MI) override;
+  void emitInstruction(const MachineInstr *MI) override;
 
 private:
   void LowerInstruction(const MachineInstr *MI, MCInst &OutMI) const;
@@ -76,7 +76,7 @@ void AltairXAsmPrinter::emitInstruction(const MachineInstr *MI) {
   }
 
   if (MI->isBundle()) {
-    const MachineBasicBlock* MBB = MI->getParent();
+    const MachineBasicBlock *MBB = MI->getParent();
 
     // temporary bundle, will be dropper after being emitted by OutStreamer
     MCInst bundle;
@@ -85,7 +85,7 @@ void AltairXAsmPrinter::emitInstruction(const MachineInstr *MI) {
     auto nextContent = content.begin(); // used to fill content and bound-check
 
     for (auto MII = std::next(MI->getIterator()); // start at first BUNDLE MI
-         MII->isInsideBundle() && MII != MBB->instr_end(); ++MII) {
+         MII != MBB->instr_end() && MII->isInsideBundle(); ++MII) {
       if (!MII->isDebugInstr() && !MII->isImplicitDef()) {
         assert(nextContent != content.end() &&
                "Bundle constains more than 2 instructions!");
@@ -136,6 +136,8 @@ MCOperand AltairXAsmPrinter::LowerOperand(const MachineOperand &MO) const {
     return LowerSymbolOperand(MO, GetExternalSymbolSymbol(MO.getSymbolName()));
   case MachineOperand::MO_ConstantPoolIndex:
     return LowerSymbolOperand(MO, GetCPISymbol(MO.getIndex()));
+  case MachineOperand::MO_JumpTableIndex:
+    return LowerSymbolOperand(MO, GetJTISymbol(MO.getIndex()));
   case MachineOperand::MO_RegisterMask:
     break;
   default:

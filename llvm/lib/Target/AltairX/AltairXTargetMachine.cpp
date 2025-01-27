@@ -1,5 +1,4 @@
-//===-- AltairXTargetMachine.cpp - Define TargetMachine for AltairX
-//-------------===//
+//===-- AltairXTargetMachine.cpp - Define TargetMachine for AltairX -------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -27,17 +26,17 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAltairXTarget() {
   //- Little endian Target Machine
   RegisterTargetMachine<AltairXTargetMachine> X(getTheAltairXTarget());
 
-  PassRegistry* PR = PassRegistry::getPassRegistry();
+  PassRegistry *PR = PassRegistry::getPassRegistry();
   initializeAltairXMoveIXFillerPass(*PR);
 }
 
 static std::string computeDataLayout() {
-  return "e" // Little endian
-      "-m:e" // ELF name mangling
-      "-p:64:64:64:64" // 64-bit pointers, 64-bit aligned
-      "-i64:64" // 64-bit integers, 64 bit aligned
-      "-n8:16:32:64" // 8, 16, 32 and 64 bits native integers
-      "-S64"; // 64-bit natural stack alignment
+  return "e"              // Little endian
+         "-m:e"           // ELF name mangling
+         "-p:64:64:64:64" // 64-bit pointers, 64-bit aligned
+         "-i64:64"        // 64-bit integers, 64 bit aligned
+         "-n8:16:32:64"   // 8, 16, 32 and 64 bits native integers
+         "-S64";          // 64-bit natural stack alignment
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<CodeModel::Model> CM,
@@ -123,6 +122,4 @@ void AltairXPassConfig::addPreEmitPass() {
   addPass(createAltairXMoveIXFillerPass());
 }
 
-void AltairXPassConfig::addPreEmitPass2() {
-  
-}
+void AltairXPassConfig::addPreEmitPass2() {}

@@ -384,7 +384,6 @@ class AltairXInstBRC<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern,
   let Opcode{3-1} = cond;
   
   let isBranch = 1;
-  let isTerminator = 1;
 }
 
 // BRU generic unconditional branches, InstFormat will be used to discriminate relative jumps from absolute jumps
@@ -396,7 +395,6 @@ class AltairXInstBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern,
   let Opcode = opcode.Value;
   
   let isBranch = 1;
-  let isTerminator = 1;
   let isBarrier = 1;
 }
 
@@ -420,7 +418,6 @@ class AltairXInstIndirectBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> 
   let Opcode = opcode.Value;
   
   let isBranch = 1;
-  let isTerminator = 1;
   let isBarrier = 1;
   let isIndirectBranch = 1;
 }
