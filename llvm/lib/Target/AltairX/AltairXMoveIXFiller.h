@@ -16,8 +16,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 
-namespace llvm
-{
+namespace llvm {
 
 class AltairXMoveIXFiller : public MachineFunctionPass {
 public:
@@ -29,12 +28,12 @@ public:
   static char ID;
 
 private:
-  void runOnMachineBasicBlock(MachineBasicBlock& MBB);
+  void runOnMachineBasicBlock(MachineBasicBlock &MBB);
 
-  const TargetMachine* TM{};
-  const AltairXInstrInfo* TII{};
+  const TargetMachine *TM{};
+  const AltairXInstrInfo *TII{};
 };
 
-}
+} // namespace llvm
 
 #endif

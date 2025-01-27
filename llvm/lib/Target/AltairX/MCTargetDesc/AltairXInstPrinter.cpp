@@ -1,4 +1,4 @@
-//===-- AltairXInstPrinter.cpp - Convert AltairX MCInst to assembly syntax ----===//
+//===-- AltairXInstPrinter.cpp - Convert AltairX MCInst to assembly syntax -==//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -29,8 +29,9 @@ using namespace llvm;
 #define PRINT_ALIAS_INSTR
 #include "AltairXGenAsmWriter.inc"
 
-AltairXInstPrinter::AltairXInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &MII,
-                                   const MCRegisterInfo &MRI)
+AltairXInstPrinter::AltairXInstPrinter(const MCAsmInfo &MAI,
+                                       const MCInstrInfo &MII,
+                                       const MCRegisterInfo &MRI)
     : MCInstPrinter(MAI, MII, MRI) {}
 
 void AltairXInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
@@ -53,7 +54,8 @@ void AltairXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
   }
 }
 
-void AltairXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
+void AltairXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
+                                      raw_ostream &O) {
   const MCOperand &Op = MI->getOperand(OpNo);
 
   if (Op.isReg()) {
@@ -85,7 +87,7 @@ void AltairXInstPrinter::printSingleInst(const MCInst *MI, uint64_t Address,
 namespace {
 
 std::string_view condCodeToString(AltairX::BRCondCode condCode) {
-  switch(condCode) {
+  switch (condCode) {
   case llvm::AltairX::BRCondCode::EQ:
     return "eq";
   case llvm::AltairX::BRCondCode::NE:
@@ -104,9 +106,8 @@ std::string_view condCodeToString(AltairX::BRCondCode condCode) {
   }
 }
 
-std::string_view SCMPCondCodeToString(AltairX::SCMPCondCode condCode)
-{
-  switch(condCode) {
+std::string_view SCMPCondCodeToString(AltairX::SCMPCondCode condCode) {
+  switch (condCode) {
   case AltairX::SCMPCondCode::EQ:
     return "e";
   case AltairX::SCMPCondCode::NE:
@@ -123,9 +124,10 @@ std::string_view SCMPCondCodeToString(AltairX::SCMPCondCode condCode)
 
 } // namespace
 
-void AltairXInstPrinter::printRelBranchTarget(const MCInst* MI, unsigned OpNo, unsigned Value, raw_ostream& O) {
-    const MCOperand& Op = MI->getOperand(OpNo);
-    Op.getExpr()->print(O, &MAI, true);
+void AltairXInstPrinter::printRelBranchTarget(const MCInst *MI, unsigned OpNo,
+                                              unsigned Value, raw_ostream &O) {
+  const MCOperand &Op = MI->getOperand(OpNo);
+  Op.getExpr()->print(O, &MAI, true);
 }
 
 void AltairXInstPrinter::printCondCode(const MCInst *MI, uint32_t OpIdx,

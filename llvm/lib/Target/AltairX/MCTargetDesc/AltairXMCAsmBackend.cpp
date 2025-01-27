@@ -34,11 +34,12 @@ namespace llvm {
 
 std::unique_ptr<MCObjectTargetWriter>
 AltairXMCAsmBackend::createObjectTargetWriter() const {
-  return std::make_unique<AltairXELFObjectWriter>(ELF::ELFOSABI_STANDALONE); // replace later ?
+  return std::make_unique<AltairXELFObjectWriter>(
+      ELF::ELFOSABI_STANDALONE); // replace later ?
 }
 
 bool AltairXMCAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
-                                       const MCSubtargetInfo*) const {
+                                       const MCSubtargetInfo *) const {
   OS.write_zeros(llvm::alignTo(Count, 4)); // No-Op is just moveix 0, so 0
   return true;
 }
@@ -55,7 +56,7 @@ AltairXMCAsmBackend::getFixupKind(StringRef Name) const {
   .Case(#Name, MCFixupKind(FirstLiteralRelocationKind + Value))
 #include "llvm/BinaryFormat/ELFRelocs/AltairX.def"
 #undef ELF_RELOC
-  .Default(std::nullopt);
+      .Default(std::nullopt);
 }
 
 const MCFixupKindInfo &
@@ -122,7 +123,7 @@ uint64_t getMoveIXHighSignedValue(uint64_t value) noexcept {
   if (!isInt<size>(static_cast<int64_t>(value))) {
     llvm_unreachable("fixup value out of range");
   }
-  if(value % Align != 0) {
+  if (value % Align != 0) {
     llvm_unreachable("fixup value bad alignement");
   }
 
@@ -132,17 +133,16 @@ uint64_t getMoveIXHighSignedValue(uint64_t value) noexcept {
 }
 
 template <uint32_t N, uint64_t Align = 1>
-constexpr uint64_t getMoveIXLowUnsignedValue(uint64_t value) noexcept
-{
+constexpr uint64_t getMoveIXLowUnsignedValue(uint64_t value) noexcept {
   // total size: N + MoveIX imm size (24)
   constexpr uint32_t size = N + 24;
   constexpr uint64_t mask = (1ull << (N - 1ull)) - 1ull;
 
   // sanity checks
-  if(!isUInt<size>(value)) {
+  if (!isUInt<size>(value)) {
     llvm_unreachable("fixup value out of range");
   }
-  if(value % Align != 0) {
+  if (value % Align != 0) {
     llvm_unreachable("fixup value bad alignement");
   }
 
@@ -150,14 +150,13 @@ constexpr uint64_t getMoveIXLowUnsignedValue(uint64_t value) noexcept
 }
 
 template <uint32_t N, uint64_t Align = 1>
-uint64_t getMoveIXHighUnsignedValue(uint64_t value) noexcept
-{
+uint64_t getMoveIXHighUnsignedValue(uint64_t value) noexcept {
   constexpr uint32_t size = N + 24;
 
-  if(!isUInt<size>(value)) {
+  if (!isUInt<size>(value)) {
     llvm_unreachable("fixup value out of range");
   }
-  if(value % Align != 0) {
+  if (value % Align != 0) {
     llvm_unreachable("fixup value bad alignement");
   }
 
@@ -166,9 +165,8 @@ uint64_t getMoveIXHighUnsignedValue(uint64_t value) noexcept
 
 } // namespace
 
-uint64_t
-AltairXMCAsmBackend::adjustImmValue(MCFixupKind kind,
-                                    uint64_t value) noexcept {
+uint64_t AltairXMCAsmBackend::adjustImmValue(MCFixupKind kind,
+                                             uint64_t value) noexcept {
 
   switch (static_cast<AltairX::Fixups>(kind)) {
   case AltairX::fixup_altairx_pcrel23lo:
@@ -203,19 +201,19 @@ AltairXMCAsmBackend::adjustImmValue(MCFixupKind kind,
 void AltairXMCAsmBackend::applyFixup(const MCAssembler &Asm,
                                      const MCFixup &Fixup,
                                      const MCValue &Target,
-                                     MutableArrayRef<char> Data,
-                                     uint64_t Value, bool IsResolved,
+                                     MutableArrayRef<char> Data, uint64_t Value,
+                                     bool IsResolved,
                                      const MCSubtargetInfo *STI) const {
-  if(!Value) {
+  if (!Value) {
     return; // Doesn't change encoding.
   }
 
   const auto kind = Fixup.getKind();
-  if(kind >= FirstLiteralRelocationKind) {
+  if (kind >= FirstLiteralRelocationKind) {
     return;
   }
 
-  const auto& info = getFixupKindInfo(Fixup.getKind());
+  const auto &info = getFixupKindInfo(Fixup.getKind());
   const auto offset = Fixup.getOffset();
   constexpr uint32_t opcodeSize = 4;
   assert(offset + opcodeSize <= Data.size() && "Invalid fixup offset!");

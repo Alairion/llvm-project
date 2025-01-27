@@ -1,5 +1,4 @@
-//===-- AltairXInstrInfo.cpp - AltairX Instruction Information
-//----------------===//
+//===-- AltairXInstrInfo.cpp - AltairX Instruction Information ------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -14,12 +13,12 @@
 #include "AltairXInstrInfo.h"
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/CodeGen/MachineConstantPool.h"
-#include "llvm/MC/TargetRegistry.h"
+#include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -33,8 +32,8 @@ using namespace llvm;
 #define DEBUG_TYPE "altairx-instrinfo"
 
 #define GET_INSTRINFO_CTOR_DTOR
-#include "AltairXGenInstrInfo.inc"
 #include "AltairXGenDFAPacketizer.inc"
+#include "AltairXGenInstrInfo.inc"
 
 namespace {
 
@@ -94,23 +93,18 @@ uint32_t GetMDURegToGPIRegCopy(MCRegister Reg) {
   llvm_unreachable("Wrong register class");
 }
 
-bool IsRIReg(MCRegister Reg)
-{
-  return AltairX::RIReg32RegClass.contains(Reg);
-}
+bool IsRIReg(MCRegister Reg) { return AltairX::RIReg32RegClass.contains(Reg); }
 
-uint32_t GetGPIRegToRIRegCopy(MCRegister Reg)
-{
-  if(AltairX::RIReg32RegClass.contains(Reg)) {
+uint32_t GetGPIRegToRIRegCopy(MCRegister Reg) {
+  if (AltairX::RIReg32RegClass.contains(Reg)) {
     return AltairX::SetFR;
   }
 
   llvm_unreachable("Wrong register class");
 }
 
-uint32_t GetRIRegToGPIRegCopy(MCRegister Reg)
-{
-  if(AltairX::RIReg32RegClass.contains(Reg)) {
+uint32_t GetRIRegToGPIRegCopy(MCRegister Reg) {
+  if (AltairX::RIReg32RegClass.contains(Reg)) {
     return AltairX::GetIR;
   }
 
@@ -129,20 +123,20 @@ void AltairXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                    MCRegister SrcReg, bool KillSrc) const {
   if (IsMDUReg(DestReg) && IsGPIReg(SrcReg)) { // MOVEQR
     BuildMI(MBB, MI, DL, get(GetGPIRegToMDURegCopy(DestReg)), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
+        .addReg(SrcReg, getKillRegState(KillSrc));
   } else if (IsGPIReg(DestReg) && IsMDUReg(SrcReg)) { // MOVERQ
     BuildMI(MBB, MI, DL, get(GetMDURegToGPIRegCopy(SrcReg)), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
+        .addReg(SrcReg, getKillRegState(KillSrc));
   } else if (IsRIReg(DestReg) && IsGPIReg(SrcReg)) { // MOVEIR
     BuildMI(MBB, MI, DL, get(GetGPIRegToRIRegCopy(DestReg)), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
+        .addReg(SrcReg, getKillRegState(KillSrc));
   } else if (IsGPIReg(DestReg) && IsRIReg(SrcReg)) { // MOVERI
     BuildMI(MBB, MI, DL, get(GetRIRegToGPIRegCopy(SrcReg)), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
+        .addReg(SrcReg, getKillRegState(KillSrc));
   } else if (IsGPIReg(DestReg) && IsGPIReg(SrcReg)) { // ADDI r, 0
     BuildMI(MBB, MI, DL, get(GetGPIRegCopy(DestReg)), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc))
-      .addImm(0);
+        .addReg(SrcReg, getKillRegState(KillSrc))
+        .addImm(0);
   } else {
     llvm_unreachable("Unsuported physical reg copy");
   }
@@ -173,10 +167,11 @@ void AltairXInstrInfo::storeRegToStackSlot(
     bool KillSrc, int FrameIndex, const TargetRegisterClass *RC,
     const TargetRegisterInfo *TRI, Register VReg [[maybe_unused]]) const {
 
-  MachineFunction& MF = *MBB.getParent();
-  MachineFrameInfo& MFI = MF.getFrameInfo();
+  MachineFunction &MF = *MBB.getParent();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
 
-  MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(MF, FrameIndex);
+  MachinePointerInfo PtrInfo =
+      MachinePointerInfo::getFixedStack(MF, FrameIndex);
   auto *MMO = MF.getMachineMemOperand(PtrInfo, MachineMemOperand::MOStore,
                                       MFI.getObjectSize(FrameIndex),
                                       MFI.getObjectAlign(FrameIndex));
@@ -196,10 +191,10 @@ void AltairXInstrInfo::storeRegToStackSlot(
   }
 
   BuildMI(MBB, MI, DebugLoc(), get(opcode))
-    .addReg(SrcReg, getKillRegState(KillSrc))
-    .addFrameIndex(FrameIndex)
-    .addImm(0)
-    .addMemOperand(MMO);
+      .addReg(SrcReg, getKillRegState(KillSrc))
+      .addFrameIndex(FrameIndex)
+      .addImm(0)
+      .addMemOperand(MMO);
 }
 
 void AltairXInstrInfo::loadRegFromStackSlot(
@@ -207,9 +202,10 @@ void AltairXInstrInfo::loadRegFromStackSlot(
     int FrameIndex, const TargetRegisterClass *RC,
     const TargetRegisterInfo *TRI, Register VReg [[maybe_unused]]) const {
 
-  MachineFunction& MF = *MBB.getParent();
-  MachineFrameInfo& MFI = MF.getFrameInfo();
-  MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(MF, FrameIndex);
+  MachineFunction &MF = *MBB.getParent();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  MachinePointerInfo PtrInfo =
+      MachinePointerInfo::getFixedStack(MF, FrameIndex);
   auto *MMO = MF.getMachineMemOperand(PtrInfo, MachineMemOperand::MOLoad,
                                       MFI.getObjectSize(FrameIndex),
                                       MFI.getObjectAlign(FrameIndex));
@@ -229,10 +225,10 @@ void AltairXInstrInfo::loadRegFromStackSlot(
   }
 
   BuildMI(MBB, MI, DebugLoc(), get(opcode))
-    .addReg(DestReg, getDefRegState(true))
-    .addFrameIndex(FrameIndex)
-    .addImm(0)
-    .addMemOperand(MMO);
+      .addReg(DestReg, getDefRegState(true))
+      .addFrameIndex(FrameIndex)
+      .addImm(0)
+      .addMemOperand(MMO);
 }
 
 namespace {
@@ -257,13 +253,18 @@ bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc DL = MI.getDebugLoc();
 
-  switch(MI.getOpcode())
-  {
+  switch (MI.getOpcode()) {
   case AltairX::AltairXGlobalAddrValue:
     expandPostRAGlobalAddrValue(MI);
     break;
   case AltairX::Ret:
     expandPostRARet(MI);
+    break;
+  case AltairX::IndirectCall:
+    expandPostRAIndirectCall(MI);
+    break;
+  case AltairX::IndirectJump:
+    expandPostRAIndirectJump(MI);
     break;
   case AltairX::ConstantToRegb:
     [[fallthrough]];
@@ -282,33 +283,55 @@ bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   return true;
 }
 
-void AltairXInstrInfo::expandPostRAGlobalAddrValue(MachineInstr& MI) const
-{
-  MachineBasicBlock& MBB = *MI.getParent();
-  auto* TRI = Subtarget.getRegisterInfo();
+void AltairXInstrInfo::expandPostRAGlobalAddrValue(MachineInstr &MI) const {
+  MachineBasicBlock &MBB = *MI.getParent();
 
   const auto dest = MI.getOperand(0).getReg();
-  const GlobalValue* global = MI.getOperand(1).getGlobal();
+  const auto addr = MI.getOperand(1);
 
-  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::AddRIq))
-    .addReg(dest, getDefRegState(true))
-    .addReg(TRI->getZeroRegister(), 0)
-    .addGlobalAddress(global);
+  if (addr.isGlobal()) {
+    const GlobalValue *global = addr.getGlobal();
+    BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::MoveIq))
+        .addReg(dest, getDefRegState(true))
+        .addGlobalAddress(global);
+  } else if (addr.isJTI()) {
+    BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::MoveIq))
+        .addReg(dest, getDefRegState(true))
+        .addJumpTableIndex(addr.getIndex());
+  } else {
+    llvm_unreachable("Unsupported operand type!");
+  }
 }
 
-void AltairXInstrInfo::expandPostRARet(MachineInstr& MI) const
-{
-  MachineBasicBlock& MBB = *MI.getParent();
-  auto* TRI = Subtarget.getRegisterInfo();
+void AltairXInstrInfo::expandPostRARet(MachineInstr &MI) const {
+  MachineBasicBlock &MBB = *MI.getParent();
+  auto *TRI = Subtarget.getRegisterInfo();
 
-  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCall))
-    .addReg(TRI->getZeroRegister())
-    .addReg(TRI->getLinkRegister());
+  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCallLink))
+      .addReg(TRI->getZeroRegister())
+      .addReg(TRI->getLinkRegister());
 }
 
-void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr& MI) const
-{
-  MachineBasicBlock& MBB = *MI.getParent();
+void AltairXInstrInfo::expandPostRAIndirectCall(MachineInstr &MI) const {
+  MachineBasicBlock &MBB = *MI.getParent();
+  auto *TRI = Subtarget.getRegisterInfo();
+
+  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCallLink))
+      .addReg(TRI->getLinkRegister())
+      .addReg(MI.getOperand(0).getReg());
+}
+
+void AltairXInstrInfo::expandPostRAIndirectJump(MachineInstr &MI) const {
+  MachineBasicBlock &MBB = *MI.getParent();
+  auto *TRI = Subtarget.getRegisterInfo();
+
+  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCallLink))
+      .addReg(TRI->getZeroRegister())
+      .addReg(MI.getOperand(0).getReg());
+}
+
+void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr &MI) const {
+  MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc dl{MI.getDebugLoc()};
 
   const auto dest = MI.getOperand(0).getReg();
@@ -350,7 +373,6 @@ void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr& MI) const
   }
 }
 
-
 bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
                                      MachineBasicBlock *&TBB,
                                      MachineBasicBlock *&FBB,
@@ -367,13 +389,13 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
 
   // If there is only one terminator instruction, process it.
   auto secondLast = std::prev(last);
-  if(last == MBB.begin() || !isUnpredicatedTerminator(*secondLast)) {
-    if(isUncondBranchOpcode(*last)) {
+  if (last == MBB.begin() || !isUnpredicatedTerminator(*secondLast)) {
+    if (isUncondBranchOpcode(*last)) {
       TBB = getBranchDestBlock(*last);
       return false;
     }
-    
-    if(isCondBranchOpcode(*last)) {
+
+    if (isCondBranchOpcode(*last)) {
       // Block ends with fall-through condbranch.
       TBB = getBranchDestBlock(*last);
       Cond.emplace_back(last->getOperand(1));
@@ -402,7 +424,7 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
 
   // If we're allowed to modify and the block ends in a unconditional branch
   // which could simply fallthrough, remove the branch.
-  if(AllowModify && isUncondBranchOpcode(*last) &&
+  if (AllowModify && isUncondBranchOpcode(*last) &&
       MBB.isLayoutSuccessor(getBranchDestBlock(*last))) {
     last->eraseFromParent();
     last = secondLast;
@@ -423,7 +445,7 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   }
 
   // If the block ends with a B and a Bcc, handle it.
-  if(isCondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
+  if (isCondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
     TBB = getBranchDestBlock(*secondLast);
     Cond.emplace_back(secondLast->getOperand(1));
     FBB = getBranchDestBlock(*last);
@@ -432,7 +454,7 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
 
   // If the block ends with two unconditional branches, handle it.  The second
   // one is not executed, so remove it.
-  if(isUncondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
+  if (isUncondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
     TBB = TBB = getBranchDestBlock(*secondLast);
     if (AllowModify) {
       last->eraseFromParent();
@@ -448,7 +470,7 @@ bool AltairXInstrInfo::reverseBranchCondition(
     SmallVectorImpl<MachineOperand> &Cond) const {
   assert(Cond.size() == 1 && "Expected from analyseBranch");
   assert(Cond[0].getParent()->getOpcode() == AltairX::PseudoBRC &&
-    "AltairXInstrInfo::reverseBranchCondition only works with PseudoBRC!");
+         "AltairXInstrInfo::reverseBranchCondition only works with PseudoBRC!");
 
   const auto cc = static_cast<ISD::CondCode>(Cond[0].getImm());
   const auto inversed = ISD::getSetCCInverse(cc, MVT::i64); // any int type
@@ -459,7 +481,7 @@ bool AltairXInstrInfo::reverseBranchCondition(
 unsigned AltairXInstrInfo::removeBranch(MachineBasicBlock &MBB,
                                         int *BytesRemoved) const {
   auto last = MBB.getLastNonDebugInstr();
-  if(last == MBB.end()) {
+  if (last == MBB.end()) {
     return 0;
   }
 
@@ -497,22 +519,19 @@ unsigned AltairXInstrInfo::removeBranch(MachineBasicBlock &MBB,
   return 2;
 }
 
-unsigned AltairXInstrInfo::insertBranch(MachineBasicBlock &MBB,
-                                        MachineBasicBlock *TBB,
-                                        MachineBasicBlock *FBB,
-                                        ArrayRef<MachineOperand> Cond,
-                                        const DebugLoc &DL,
-                                        int *BytesAdded) const {
+unsigned AltairXInstrInfo::insertBranch(
+    MachineBasicBlock &MBB, MachineBasicBlock *TBB, MachineBasicBlock *FBB,
+    ArrayRef<MachineOperand> Cond, const DebugLoc &DL, int *BytesAdded) const {
   // Shouldn't be a fall through.
   assert(TBB && "insertBranch must not be told to insert a fallthrough");
 
-  if(!FBB) {
+  if (!FBB) {
     if (Cond.empty()) { // Unconditional branch
       BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(TBB);
     } else {
       BuildMI(&MBB, DL, get(AltairX::PseudoBRC))
-        .addMBB(TBB)
-        .addImm(Cond[0].getImm());
+          .addMBB(TBB)
+          .addImm(Cond[0].getImm());
     }
 
     if (BytesAdded) {
@@ -524,8 +543,8 @@ unsigned AltairXInstrInfo::insertBranch(MachineBasicBlock &MBB,
 
   // Two-way conditional branch.
   BuildMI(&MBB, DL, get(AltairX::PseudoBRC))
-    .addMBB(TBB)
-    .addImm(Cond[0].getImm());
+      .addMBB(TBB)
+      .addImm(Cond[0].getImm());
   BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(FBB);
   if (BytesAdded) {
     *BytesAdded = 8;
@@ -548,7 +567,8 @@ AltairXInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
   }
 }
 
-MachineOperand *AltairXInstrInfo::getLatestRegDef(MachineInstr &MI, Register reg) {
+MachineOperand *AltairXInstrInfo::getLatestRegDef(MachineInstr &MI,
+                                                  Register reg) {
   const auto &block = *MI.getParent();
   const auto end = block.rend().getInstrIterator();
   for (auto begin = MI.getIterator().getReverse(); begin != end; ++begin) {

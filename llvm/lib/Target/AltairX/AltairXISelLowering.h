@@ -1,5 +1,4 @@
-//=== AltairXISelLowering.h - AltairX DAG Lowering Interface --------*- C++
-//-*-===//
+//=== AltairXISelLowering.h - AltairX DAG Lowering Interface ----*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -31,6 +30,8 @@ enum NodeType {
   CALL,
   JUMP,
   INDIRECT_CALL,
+  INDIRECT_JUMP,
+  INDIRECT_BRA,
   CMP,
   BRCOND,
   SBIT,
@@ -46,7 +47,7 @@ public:
   explicit AltairXTargetLowering(const TargetMachine &TM,
                                  const AltairXSubtarget &STI);
 
-  SDValue LowerOperation(SDValue Op, SelectionDAG& DAG) const override;
+  SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
   const char *getTargetNodeName(unsigned Opcode) const override;
 
@@ -55,7 +56,8 @@ protected:
   const AltairXSubtarget &Subtarget;
 
 private:
-  EVT getSetCCResultType(const DataLayout&, LLVMContext&, EVT VT) const override;
+  EVT getSetCCResultType(const DataLayout &, LLVMContext &,
+                         EVT VT) const override;
 
   using RegsToPassVector = SmallVector<std::pair<unsigned int, SDValue>, 8>;
 
@@ -72,6 +74,7 @@ private:
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
                       const SmallVectorImpl<SDValue> &OutVals, const SDLoc &dl,
                       SelectionDAG &DAG) const override;
+
   bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
                       bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
@@ -80,20 +83,20 @@ private:
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
 
-  void HandleByVal(CCState *State, unsigned int &Size, Align Align) const override;
+  void HandleByVal(CCState *State, unsigned int &Size,
+                   Align Align) const override;
 
-  SDValue LowerMemOpCallTo(SDValue Chain, SDValue Arg, const SDLoc &dl,
-                           SelectionDAG &DAG, const CCValAssign &VA,
-                           ISD::ArgFlagsTy Flags) const;
-
-  SDValue LowerGlobalAddress(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerBlockAddress(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerConstantPool(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerReturnAddr(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerSETCC(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerSELECT_CC(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerBRCOND(SDValue Op, SelectionDAG& DAG) const;
-  SDValue LowerBR_CC(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerReturnAddr(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerBRIND(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerVASTART(SDValue Op, SelectionDAG& DAG) const;
 };
 } // namespace llvm
 
