@@ -28,10 +28,10 @@ public:
   static char ID;
 
 private:
-  void runOnMachineBasicBlock(MachineBasicBlock &MBB);
+  void runOnMachineBasicBlock(MachineBasicBlock &block);
 
-  const TargetMachine *TM{};
-  const AltairXInstrInfo *TII{};
+  const TargetMachine *target{};
+  const AltairXInstrInfo *instInfo{};
 };
 
 } // namespace llvm

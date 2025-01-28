@@ -42,26 +42,26 @@ AltairXBranchPatcher::AltairXBranchPatcher() : MachineFunctionPass(ID) {
   initializeAltairXBranchPatcherPass(*PassRegistry::getPassRegistry());
 }
 
-void AltairXBranchPatcher::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<MachineBranchProbabilityInfo>();
-  MachineFunctionPass::getAnalysisUsage(AU);
+void AltairXBranchPatcher::getAnalysisUsage(AnalysisUsage &analysis) const {
+  analysis.addRequired<MachineBranchProbabilityInfo>();
+  MachineFunctionPass::getAnalysisUsage(analysis);
 }
 
-bool AltairXBranchPatcher::runOnMachineFunction(MachineFunction &F) {
-  TM = &F.getTarget();
-  TII = F.getSubtarget<AltairXSubtarget>().getInstrInfo();
-  MBPI = &getAnalysis<MachineBranchProbabilityInfo>();
+bool AltairXBranchPatcher::runOnMachineFunction(MachineFunction &func) {
+  target = &func.getTarget();
+  instInfo = func.getSubtarget<AltairXSubtarget>().getInstrInfo();
+  branchInfo = &getAnalysis<MachineBranchProbabilityInfo>();
 
-  for (auto &MBB : F) {
-    runOnMachineBasicBlock(MBB);
+  for (auto &block : func) {
+    runOnMachineBasicBlock(block);
   }
 
   return false;
 }
 
-void AltairXBranchPatcher::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
-  auto last = MBB.getLastNonDebugInstr();
-  if (last == MBB.end()) {
+void AltairXBranchPatcher::runOnMachineBasicBlock(MachineBasicBlock &block) {
+  auto last = block.getLastNonDebugInstr();
+  if (last == block.end()) {
     return; // empty block (always fallthrough)
   }
 
@@ -71,15 +71,15 @@ void AltairXBranchPatcher::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
   }
 
   if (AltairXInstrInfo::isUncondBranchOpcode(*last) &&
-      last == MBB.getFirstNonDebugInstr()) {
+      last == block.getFirstNonDebugInstr()) {
     return; // single unconditional branch
   }
 
   const auto secondLast = std::prev(last);
   if (AltairXInstrInfo::isCondBranchOpcode(*last)) {
-    runOnPseudoBRC(MBB, *last);
+    runOnPseudoBRC(block, *last);
   } else if (AltairXInstrInfo::isCondBranchOpcode(*secondLast)) {
-    runOnPseudoBRC(MBB, *secondLast);
+    runOnPseudoBRC(block, *secondLast);
   }
 }
 
@@ -87,9 +87,8 @@ namespace {
 
 template <typename It> // It::value_type compatible with const machineInstr&
 auto findNearestCmp(It begin, It end) {
-  return std::find_if(begin, end, [](auto &instr) {
-    return AltairXInstrInfo::isCompare(instr);
-  });
+  return std::find_if(
+      begin, end, [](auto &inst) { return AltairXInstrInfo::isCompare(inst); });
 }
 
 struct BRCOperands {
@@ -133,18 +132,18 @@ BRCOperands analysePseudoBRC(ISD::CondCode value) {
 
 } // namespace
 
-void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &MBB,
-                                          MachineInstr &MI) {
-  const auto cc = static_cast<ISD::CondCode>(MI.getOperand(1).getImm());
+void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &block,
+                                          MachineInstr &inst) {
+  const auto cc = static_cast<ISD::CondCode>(inst.getOperand(1).getImm());
   const auto [nativeCC, swapCMPOps] = analysePseudoBRC(cc);
 
-  auto rend = MBB.rend().getInstrIterator();
-  auto cmpIt = findNearestCmp(MI.getIterator().getReverse(), rend);
+  auto rend = block.rend().getInstrIterator();
+  auto cmpIt = findNearestCmp(inst.getIterator().getReverse(), rend);
   assert(cmpIt != rend && "BRC without CMP");
   MachineInstr *cmpInst = to_address(cmpIt);
   if (swapCMPOps) {
-    auto *newCmp = BuildMI(MBB, *cmpInst, cmpInst->getDebugLoc(),
-                           TII->get(cmpInst->getOpcode()))
+    auto *newCmp = BuildMI(block, *cmpInst, cmpInst->getDebugLoc(),
+                           instInfo->get(cmpInst->getOpcode()))
                        .addReg(cmpInst->getOperand(1).getReg())
                        .addReg(cmpInst->getOperand(0).getReg())
                        .getInstr();
@@ -152,20 +151,20 @@ void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &MBB,
     cmpInst = newCmp;
   }
 
-  runOnCMP(MBB, *cmpInst);
+  runOnCMP(block, *cmpInst);
 
-  auto *target = MI.getOperand(0).getMBB();
-  const auto probability = MBPI->getEdgeProbability(&MBB, target);
+  auto *target = inst.getOperand(0).getMBB();
+  const auto probability = branchInfo->getEdgeProbability(&block, target);
   // Set prediction bit if probability >= 50%
   const bool likely =
       probability.getNumerator() >= probability.getDenominator() / 2u;
 
-  BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AltairX::BRC))
+  BuildMI(block, inst, inst.getDebugLoc(), instInfo->get(AltairX::BRC))
       .addMBB(target)
       .addImm(static_cast<int64_t>(nativeCC))
       .addImm(static_cast<int64_t>(likely));
 
-  MI.eraseFromParent();
+  inst.eraseFromParent();
 }
 
 namespace {
@@ -187,11 +186,12 @@ uint32_t getCmpImmVersion(uint32_t opcode) {
 
 } // namespace
 
-void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &MBB, MachineInstr &MI) {
-  const auto reg = MI.getOperand(1).getReg();
-  const auto killing = MI.getOperand(1).isKill();
+void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &block,
+                                    MachineInstr &inst) {
+  const auto reg = inst.getOperand(1).getReg();
+  const auto killing = inst.getOperand(1).isKill();
 
-  MachineOperand *operand = AltairXInstrInfo::getLatestRegDef(MI, reg);
+  MachineOperand *operand = AltairXInstrInfo::getLatestRegDef(inst, reg);
   if (!operand) {
     return;
   }
@@ -216,16 +216,16 @@ void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &MBB, MachineInstr &MI) {
     return; // if imm does not fit imm size we will use a reg anyway...
   }
 
-  const auto cmpRIOpcode = getCmpImmVersion(MI.getOpcode());
-  BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(cmpRIOpcode))
-      .addReg(MI.getOperand(0).getReg())
+  const auto cmpRIOpcode = getCmpImmVersion(inst.getOpcode());
+  BuildMI(block, inst, inst.getDebugLoc(), instInfo->get(cmpRIOpcode))
+      .addReg(inst.getOperand(0).getReg())
       .addImm(imm);
 
   if (killing) {
     definition->eraseFromParent();
   }
 
-  MI.eraseFromParent();
+  inst.eraseFromParent();
 }
 
 } // namespace llvm

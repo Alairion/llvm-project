@@ -23,7 +23,7 @@
 #include "llvm/Support/ErrorHandling.h"
 
 #include "AltairXCommon.h"
-#include "AltairXMachineFunction.h"
+#include "AltairXMachineFunctionInfo.h"
 #include "AltairXRegisterInfo.h"
 #include "AltairXTargetMachine.h"
 
@@ -37,74 +37,74 @@ using namespace llvm;
 
 namespace {
 
-bool IsGPIReg(MCRegister Reg) {
-  return AltairX::GPIReg64RegClass.contains(Reg) ||
-         AltairX::GPIReg32RegClass.contains(Reg) ||
-         AltairX::GPIReg16RegClass.contains(Reg) ||
-         AltairX::GPIReg8RegClass.contains(Reg);
+bool isGPIReg(MCRegister reg) {
+  return AltairX::GPIReg64RegClass.contains(reg) ||
+         AltairX::GPIReg32RegClass.contains(reg) ||
+         AltairX::GPIReg16RegClass.contains(reg) ||
+         AltairX::GPIReg8RegClass.contains(reg);
 }
 
-uint32_t GetGPIRegCopy(MCRegister Reg) {
-  if (AltairX::GPIReg64RegClass.contains(Reg)) {
+uint32_t getGPIRegCopy(MCRegister reg) {
+  if (AltairX::GPIReg64RegClass.contains(reg)) {
     return AltairX::AddRIq;
-  } else if (AltairX::GPIReg32RegClass.contains(Reg)) {
+  } else if (AltairX::GPIReg32RegClass.contains(reg)) {
     return AltairX::AddRId;
-  } else if (AltairX::GPIReg16RegClass.contains(Reg)) {
+  } else if (AltairX::GPIReg16RegClass.contains(reg)) {
     return AltairX::AddRIw;
-  } else if (AltairX::GPIReg8RegClass.contains(Reg)) {
+  } else if (AltairX::GPIReg8RegClass.contains(reg)) {
     return AltairX::AddRIb;
   }
 
   llvm_unreachable("Wrong register class");
 }
 
-bool IsMDUReg(MCRegister Reg) {
-  return AltairX::MDUReg64RegClass.contains(Reg) ||
-         AltairX::MDUReg32RegClass.contains(Reg) ||
-         AltairX::MDUReg16RegClass.contains(Reg) ||
-         AltairX::MDUReg8RegClass.contains(Reg);
+bool isMDUReg(MCRegister reg) {
+  return AltairX::MDUReg64RegClass.contains(reg) ||
+         AltairX::MDUReg32RegClass.contains(reg) ||
+         AltairX::MDUReg16RegClass.contains(reg) ||
+         AltairX::MDUReg8RegClass.contains(reg);
 }
 
-uint32_t GetGPIRegToMDURegCopy(MCRegister Reg) {
-  if (AltairX::MDUReg64RegClass.contains(Reg)) {
+uint32_t getGPIRegToMDURegCopy(MCRegister reg) {
+  if (AltairX::MDUReg64RegClass.contains(reg)) {
     return AltairX::SetMDq;
-  } else if (AltairX::MDUReg32RegClass.contains(Reg)) {
+  } else if (AltairX::MDUReg32RegClass.contains(reg)) {
     return AltairX::SetMDd;
-  } else if (AltairX::MDUReg16RegClass.contains(Reg)) {
+  } else if (AltairX::MDUReg16RegClass.contains(reg)) {
     return AltairX::SetMDw;
-  } else if (AltairX::MDUReg8RegClass.contains(Reg)) {
+  } else if (AltairX::MDUReg8RegClass.contains(reg)) {
     return AltairX::SetMDb;
   }
 
   llvm_unreachable("Wrong register class");
 }
 
-uint32_t GetMDURegToGPIRegCopy(MCRegister Reg) {
-  if (AltairX::MDUReg64RegClass.contains(Reg)) {
+uint32_t getMDURegToGPIRegCopy(MCRegister reg) {
+  if (AltairX::MDUReg64RegClass.contains(reg)) {
     return AltairX::GetMDq;
-  } else if (AltairX::MDUReg32RegClass.contains(Reg)) {
+  } else if (AltairX::MDUReg32RegClass.contains(reg)) {
     return AltairX::GetMDd;
-  } else if (AltairX::MDUReg16RegClass.contains(Reg)) {
+  } else if (AltairX::MDUReg16RegClass.contains(reg)) {
     return AltairX::GetMDw;
-  } else if (AltairX::MDUReg8RegClass.contains(Reg)) {
+  } else if (AltairX::MDUReg8RegClass.contains(reg)) {
     return AltairX::GetMDb;
   }
 
   llvm_unreachable("Wrong register class");
 }
 
-bool IsRIReg(MCRegister Reg) { return AltairX::RIReg32RegClass.contains(Reg); }
+bool isRIReg(MCRegister reg) { return AltairX::RIReg32RegClass.contains(reg); }
 
-uint32_t GetGPIRegToRIRegCopy(MCRegister Reg) {
-  if (AltairX::RIReg32RegClass.contains(Reg)) {
+uint32_t getGPIRegToRIRegCopy(MCRegister reg) {
+  if (AltairX::RIReg32RegClass.contains(reg)) {
     return AltairX::SetFR;
   }
 
   llvm_unreachable("Wrong register class");
 }
 
-uint32_t GetRIRegToGPIRegCopy(MCRegister Reg) {
-  if (AltairX::RIReg32RegClass.contains(Reg)) {
+uint32_t getRIRegToGPIRegCopy(MCRegister reg) {
+  if (AltairX::RIReg32RegClass.contains(reg)) {
     return AltairX::GetIR;
   }
 
@@ -121,20 +121,20 @@ void AltairXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                    MachineBasicBlock::iterator MI,
                                    const DebugLoc &DL, MCRegister DestReg,
                                    MCRegister SrcReg, bool KillSrc) const {
-  if (IsMDUReg(DestReg) && IsGPIReg(SrcReg)) { // MOVEQR
-    BuildMI(MBB, MI, DL, get(GetGPIRegToMDURegCopy(DestReg)), DestReg)
+  if (isMDUReg(DestReg) && isGPIReg(SrcReg)) { // MOVEQR
+    BuildMI(MBB, MI, DL, get(getGPIRegToMDURegCopy(DestReg)), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (IsGPIReg(DestReg) && IsMDUReg(SrcReg)) { // MOVERQ
-    BuildMI(MBB, MI, DL, get(GetMDURegToGPIRegCopy(SrcReg)), DestReg)
+  } else if (isGPIReg(DestReg) && isMDUReg(SrcReg)) { // MOVERQ
+    BuildMI(MBB, MI, DL, get(getMDURegToGPIRegCopy(SrcReg)), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (IsRIReg(DestReg) && IsGPIReg(SrcReg)) { // MOVEIR
-    BuildMI(MBB, MI, DL, get(GetGPIRegToRIRegCopy(DestReg)), DestReg)
+  } else if (isRIReg(DestReg) && isGPIReg(SrcReg)) { // MOVEIR
+    BuildMI(MBB, MI, DL, get(getGPIRegToRIRegCopy(DestReg)), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (IsGPIReg(DestReg) && IsRIReg(SrcReg)) { // MOVERI
-    BuildMI(MBB, MI, DL, get(GetRIRegToGPIRegCopy(SrcReg)), DestReg)
+  } else if (isGPIReg(DestReg) && isRIReg(SrcReg)) { // MOVERI
+    BuildMI(MBB, MI, DL, get(getRIRegToGPIRegCopy(SrcReg)), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (IsGPIReg(DestReg) && IsGPIReg(SrcReg)) { // ADDI r, 0
-    BuildMI(MBB, MI, DL, get(GetGPIRegCopy(DestReg)), DestReg)
+  } else if (isGPIReg(DestReg) && isGPIReg(SrcReg)) { // ADDI r, 0
+    BuildMI(MBB, MI, DL, get(getGPIRegCopy(DestReg)), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
         .addImm(0);
   } else {
@@ -149,12 +149,12 @@ MachineInstr *AltairXInstrInfo::foldMemoryOperandImpl(
   Register DstReg = MI.getOperand(0).getReg();
   Register SrcReg = MI.getOperand(1).getReg();
 
-  if(IsRIReg(SrcReg) && DstReg.isVirtual()) {
+  if(isRIReg(SrcReg) && DstReg.isVirtual()) {
     MF.getRegInfo().constrainRegClass(DstReg, &AltairX::GPIReg32RegClass);
     return nullptr;
   }
 
-  if(IsRIReg(DstReg) && SrcReg.isVirtual()) {
+  if(isRIReg(DstReg) && SrcReg.isVirtual()) {
     MF.getRegInfo().constrainRegClass(SrcReg, &AltairX::GPIReg32RegClass);
     return nullptr;
   }
@@ -233,14 +233,14 @@ void AltairXInstrInfo::loadRegFromStackSlot(
 
 namespace {
 
-uint32_t getMoveIForReg(MCRegister Reg) {
-  if (AltairX::GPIReg64RegClass.contains(Reg)) {
+uint32_t getMoveIForReg(MCRegister reg) {
+  if (AltairX::GPIReg64RegClass.contains(reg)) {
     return AltairX::MoveIq;
-  } else if (AltairX::GPIReg32RegClass.contains(Reg)) {
+  } else if (AltairX::GPIReg32RegClass.contains(reg)) {
     return AltairX::MoveId;
-  } else if (AltairX::GPIReg16RegClass.contains(Reg)) {
+  } else if (AltairX::GPIReg16RegClass.contains(reg)) {
     return AltairX::MoveIw;
-  } else if (AltairX::GPIReg8RegClass.contains(Reg)) {
+  } else if (AltairX::GPIReg8RegClass.contains(reg)) {
     return AltairX::MoveIb;
   }
 
@@ -249,22 +249,20 @@ uint32_t getMoveIForReg(MCRegister Reg) {
 
 } // namespace
 
-bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
-  MachineBasicBlock &MBB = *MI.getParent();
-  DebugLoc DL = MI.getDebugLoc();
+bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &inst) const {
 
-  switch (MI.getOpcode()) {
+  switch (inst.getOpcode()) {
   case AltairX::AltairXGlobalAddrValue:
-    expandPostRAGlobalAddrValue(MI);
+    expandPostRAGlobalAddrValue(inst);
     break;
   case AltairX::Ret:
-    expandPostRARet(MI);
+    expandPostRARet(inst);
     break;
   case AltairX::IndirectCall:
-    expandPostRAIndirectCall(MI);
+    expandPostRAIndirectCall(inst);
     break;
   case AltairX::IndirectJump:
-    expandPostRAIndirectJump(MI);
+    expandPostRAIndirectJump(inst);
     break;
   case AltairX::ConstantToRegb:
     [[fallthrough]];
@@ -273,29 +271,31 @@ bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case AltairX::ConstantToRegd:
     [[fallthrough]];
   case AltairX::ConstantToRegq:
-    expandPostRAConstantToReg(MI);
+    expandPostRAConstantToReg(inst);
     break;
   default:
     return false;
   }
 
-  MBB.erase(MI);
+  MachineBasicBlock &block = *inst.getParent();
+  block.erase(inst);
+
   return true;
 }
 
-void AltairXInstrInfo::expandPostRAGlobalAddrValue(MachineInstr &MI) const {
-  MachineBasicBlock &MBB = *MI.getParent();
+void AltairXInstrInfo::expandPostRAGlobalAddrValue(MachineInstr &inst) const {
+  MachineBasicBlock &block = *inst.getParent();
 
-  const auto dest = MI.getOperand(0).getReg();
-  const auto addr = MI.getOperand(1);
+  const auto dest = inst.getOperand(0).getReg();
+  const auto addr = inst.getOperand(1);
 
   if (addr.isGlobal()) {
     const GlobalValue *global = addr.getGlobal();
-    BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::MoveIq))
+    BuildMI(block, inst, inst.getDebugLoc(), get(AltairX::MoveIq))
         .addReg(dest, getDefRegState(true))
         .addGlobalAddress(global);
   } else if (addr.isJTI()) {
-    BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::MoveIq))
+    BuildMI(block, inst, inst.getDebugLoc(), get(AltairX::MoveIq))
         .addReg(dest, getDefRegState(true))
         .addJumpTableIndex(addr.getIndex());
   } else {
@@ -303,43 +303,43 @@ void AltairXInstrInfo::expandPostRAGlobalAddrValue(MachineInstr &MI) const {
   }
 }
 
-void AltairXInstrInfo::expandPostRARet(MachineInstr &MI) const {
-  MachineBasicBlock &MBB = *MI.getParent();
+void AltairXInstrInfo::expandPostRARet(MachineInstr &inst) const {
+  MachineBasicBlock &block = *inst.getParent();
   auto *TRI = Subtarget.getRegisterInfo();
 
-  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCallLink))
+  BuildMI(block, inst, inst.getDebugLoc(), get(AltairX::IndirectCallLink))
       .addReg(TRI->getZeroRegister())
       .addReg(TRI->getLinkRegister());
 }
 
-void AltairXInstrInfo::expandPostRAIndirectCall(MachineInstr &MI) const {
-  MachineBasicBlock &MBB = *MI.getParent();
+void AltairXInstrInfo::expandPostRAIndirectCall(MachineInstr &inst) const {
+  MachineBasicBlock &block = *inst.getParent();
   auto *TRI = Subtarget.getRegisterInfo();
 
-  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCallLink))
+  BuildMI(block, inst, inst.getDebugLoc(), get(AltairX::IndirectCallLink))
       .addReg(TRI->getLinkRegister())
-      .addReg(MI.getOperand(0).getReg());
+      .addReg(inst.getOperand(0).getReg());
 }
 
-void AltairXInstrInfo::expandPostRAIndirectJump(MachineInstr &MI) const {
-  MachineBasicBlock &MBB = *MI.getParent();
+void AltairXInstrInfo::expandPostRAIndirectJump(MachineInstr &inst) const {
+  MachineBasicBlock &block = *inst.getParent();
   auto *TRI = Subtarget.getRegisterInfo();
 
-  BuildMI(MBB, MI, MI.getDebugLoc(), get(AltairX::IndirectCallLink))
+  BuildMI(block, inst, inst.getDebugLoc(), get(AltairX::IndirectCallLink))
       .addReg(TRI->getZeroRegister())
-      .addReg(MI.getOperand(0).getReg());
+      .addReg(inst.getOperand(0).getReg());
 }
 
-void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr &MI) const {
-  MachineBasicBlock &MBB = *MI.getParent();
-  DebugLoc dl{MI.getDebugLoc()};
+void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr &inst) const {
+  MachineBasicBlock &block = *inst.getParent();
+  DebugLoc dl{inst.getDebugLoc()};
 
-  const auto dest = MI.getOperand(0).getReg();
-  const std::int64_t imm = MI.getOperand(1).getImm();
+  const auto dest = inst.getOperand(0).getReg();
+  const std::int64_t imm = inst.getOperand(1).getImm();
 
   if (isInt<42>(imm)) {
     // Fits movei + moveix
-    BuildMI(MBB, MI, dl, get(getMoveIForReg(dest)))
+    BuildMI(block, inst, dl, get(getMoveIForReg(dest)))
         .addReg(dest, getDefRegState(true))
         .addImm(imm);
   } else {
@@ -355,17 +355,17 @@ void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr &MI) const {
     const auto lowvalue = uimm & 0xFFFFFFFFull;
     const auto highvalue = (uimm >> 32) & 0xFFFFFFFFull;
 
-    BuildMI(MBB, MI, dl, get(AltairX::MoveIq))
+    BuildMI(block, inst, dl, get(AltairX::MoveIq))
         .addReg(dest, getDefRegState(true))
         .addImm(highvalue);
 
-    BuildMI(MBB, MI, dl, get(AltairX::LslRIq))
+    BuildMI(block, inst, dl, get(AltairX::LslRIq))
         .addReg(dest)
         .addReg(dest)
         .addImm(32);
 
     if (lowvalue != 0) { // this is an obvious optimization
-      BuildMI(MBB, MI, dl, get(AltairX::AddRIq))
+      BuildMI(block, inst, dl, get(AltairX::AddRIq))
           .addReg(dest)
           .addReg(dest)
           .addImm(lowvalue);
@@ -455,7 +455,7 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   // If the block ends with two unconditional branches, handle it.  The second
   // one is not executed, so remove it.
   if (isUncondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
-    TBB = TBB = getBranchDestBlock(*secondLast);
+    TBB = getBranchDestBlock(*secondLast);
     if (AllowModify) {
       last->eraseFromParent();
     }
@@ -554,30 +554,30 @@ unsigned AltairXInstrInfo::insertBranch(
 }
 
 MachineBasicBlock *
-AltairXInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
-  switch (MI.getOpcode()) {
+AltairXInstrInfo::getBranchDestBlock(const MachineInstr &inst) const {
+  switch (inst.getOpcode()) {
   case AltairX::BRA:
     [[fallthrough]];
   case AltairX::PseudoBRC:
     [[fallthrough]];
   case AltairX::BRC:
-    return MI.getOperand(0).getMBB();
+    return inst.getOperand(0).getMBB();
   default:
     llvm_unreachable("unexpected opcode!");
   }
 }
 
-MachineOperand *AltairXInstrInfo::getLatestRegDef(MachineInstr &MI,
+MachineOperand *AltairXInstrInfo::getLatestRegDef(MachineInstr &inst,
                                                   Register reg) {
-  const auto &block = *MI.getParent();
+  const MachineBasicBlock &block = *inst.getParent();
   const auto end = block.rend().getInstrIterator();
-  for (auto begin = MI.getIterator().getReverse(); begin != end; ++begin) {
+  for (auto begin = inst.getIterator().getReverse(); begin != end; ++begin) {
     MachineInstr &inst = *begin;
     if (inst.getNumOperands() == 0) {
       continue;
     }
 
-    auto operand = inst.findRegisterDefOperand(reg, false, false);
+    MachineOperand *operand = inst.findRegisterDefOperand(reg, false, false);
     if (operand) {
       return operand;
     }

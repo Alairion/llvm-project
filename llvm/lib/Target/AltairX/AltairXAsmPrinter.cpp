@@ -46,6 +46,7 @@ public:
   // auto-generated function emitPseudoExpansionLowering to expand pseudo
   // instruction
   void EmitToStreamer(MCStreamer &S, const MCInst &Inst);
+
   // Auto-generated function in AltairXGenMCPseudoLowering.inc
   bool emitPseudoExpansionLowering(MCStreamer &OutStreamer,
                                    const MachineInstr *MI);
@@ -54,9 +55,9 @@ public:
   void emitInstruction(const MachineInstr *MI) override;
 
 private:
-  void LowerInstruction(const MachineInstr *MI, MCInst &OutMI) const;
-  MCOperand LowerOperand(const MachineOperand &MO) const;
-  MCOperand LowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym) const;
+  void lowerInstruction(const MachineInstr *MI, MCInst &OutMI) const;
+  MCOperand lowerOperand(const MachineOperand &MO) const;
+  MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym) const;
 
   const AltairXSubtarget *Subtarget{};
 };
@@ -76,7 +77,7 @@ void AltairXAsmPrinter::emitInstruction(const MachineInstr *MI) {
   }
 
   if (MI->isBundle()) {
-    const MachineBasicBlock *MBB = MI->getParent();
+    const MachineBasicBlock *block = MI->getParent();
 
     // temporary bundle, will be dropper after being emitted by OutStreamer
     MCInst bundle;
@@ -84,13 +85,13 @@ void AltairXAsmPrinter::emitInstruction(const MachineInstr *MI) {
     std::array<MCInst, 2> content; // buffer for bundle instructions (max 2)
     auto nextContent = content.begin(); // used to fill content and bound-check
 
-    for (auto MII = std::next(MI->getIterator()); // start at first BUNDLE MI
-         MII != MBB->instr_end() && MII->isInsideBundle(); ++MII) {
-      if (!MII->isDebugInstr() && !MII->isImplicitDef()) {
+    for (auto it = std::next(MI->getIterator()); // start at first BUNDLE MI
+         it != block->instr_end() && it->isInsideBundle(); ++it) {
+      if (!it->isDebugInstr() && !it->isImplicitDef()) {
         assert(nextContent != content.end() &&
                "Bundle constains more than 2 instructions!");
 
-        LowerInstruction(to_address(MII), *nextContent);
+        lowerInstruction(to_address(it), *nextContent);
         bundle.addOperand(MCOperand::createInst(to_address(nextContent)));
         ++nextContent;
       }
@@ -99,24 +100,24 @@ void AltairXAsmPrinter::emitInstruction(const MachineInstr *MI) {
     EmitToStreamer(*OutStreamer, bundle);
   } else {
     MCInst TmpInst;
-    LowerInstruction(MI, TmpInst);
+    lowerInstruction(MI, TmpInst);
     EmitToStreamer(*OutStreamer, TmpInst);
   }
 }
 
-void AltairXAsmPrinter::LowerInstruction(const MachineInstr *MI,
+void AltairXAsmPrinter::lowerInstruction(const MachineInstr *MI,
                                          MCInst &OutMI) const {
   OutMI.setOpcode(MI->getOpcode());
 
-  for (const MachineOperand &MO : MI->operands()) {
-    MCOperand MCOp = LowerOperand(MO);
-    if (MCOp.isValid()) {
-      OutMI.addOperand(MCOp);
+  for (const MachineOperand &op : MI->operands()) {
+    MCOperand mcOp = lowerOperand(op);
+    if (mcOp.isValid()) {
+      OutMI.addOperand(mcOp);
     }
   }
 }
 
-MCOperand AltairXAsmPrinter::LowerOperand(const MachineOperand &MO) const {
+MCOperand AltairXAsmPrinter::lowerOperand(const MachineOperand &MO) const {
   switch (MO.getType()) {
   case MachineOperand::MO_Register:
     // Ignore all implicit register operands.
@@ -127,17 +128,17 @@ MCOperand AltairXAsmPrinter::LowerOperand(const MachineOperand &MO) const {
   case MachineOperand::MO_Immediate:
     return MCOperand::createImm(MO.getImm());
   case MachineOperand::MO_MachineBasicBlock:
-    return LowerSymbolOperand(MO, MO.getMBB()->getSymbol());
+    return lowerSymbolOperand(MO, MO.getMBB()->getSymbol());
   case MachineOperand::MO_GlobalAddress:
-    return LowerSymbolOperand(MO, getSymbol(MO.getGlobal()));
+    return lowerSymbolOperand(MO, getSymbol(MO.getGlobal()));
   case MachineOperand::MO_BlockAddress:
-    return LowerSymbolOperand(MO, GetBlockAddressSymbol(MO.getBlockAddress()));
+    return lowerSymbolOperand(MO, GetBlockAddressSymbol(MO.getBlockAddress()));
   case MachineOperand::MO_ExternalSymbol:
-    return LowerSymbolOperand(MO, GetExternalSymbolSymbol(MO.getSymbolName()));
+    return lowerSymbolOperand(MO, GetExternalSymbolSymbol(MO.getSymbolName()));
   case MachineOperand::MO_ConstantPoolIndex:
-    return LowerSymbolOperand(MO, GetCPISymbol(MO.getIndex()));
+    return lowerSymbolOperand(MO, GetCPISymbol(MO.getIndex()));
   case MachineOperand::MO_JumpTableIndex:
-    return LowerSymbolOperand(MO, GetJTISymbol(MO.getIndex()));
+    return lowerSymbolOperand(MO, GetJTISymbol(MO.getIndex()));
   case MachineOperand::MO_RegisterMask:
     break;
   default:
@@ -147,16 +148,16 @@ MCOperand AltairXAsmPrinter::LowerOperand(const MachineOperand &MO) const {
   return MCOperand();
 }
 
-MCOperand AltairXAsmPrinter::LowerSymbolOperand(const MachineOperand &MO,
+MCOperand AltairXAsmPrinter::lowerSymbolOperand(const MachineOperand &MO,
                                                 MCSymbol *Sym) const {
-  MCContext &Ctx = OutContext;
+  MCContext &context = OutContext;
 
   const MCExpr *Expr =
-      MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, Ctx);
+      MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, context);
 
   if (!MO.isJTI() && !MO.isMBB() && MO.getOffset()) {
     Expr = MCBinaryExpr::createAdd(
-        Expr, MCConstantExpr::create(MO.getOffset(), Ctx), Ctx);
+        Expr, MCConstantExpr::create(MO.getOffset(), context), context);
     llvm_unreachable("LowerSymbolOperand is not supported yet");
   }
 

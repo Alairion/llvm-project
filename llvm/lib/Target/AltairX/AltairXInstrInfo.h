@@ -34,11 +34,11 @@ public:
   bool expandPostRAPseudo(MachineInstr &MI) const override;
 
 private:
-  void expandPostRAGlobalAddrValue(MachineInstr &MI) const;
-  void expandPostRARet(MachineInstr &MI) const;
-  void expandPostRAIndirectCall(MachineInstr &MI) const;
-  void expandPostRAIndirectJump(MachineInstr &MI) const;
-  void expandPostRAConstantToReg(MachineInstr &MI) const;
+  void expandPostRAGlobalAddrValue(MachineInstr &inst) const;
+  void expandPostRARet(MachineInstr &inst) const;
+  void expandPostRAIndirectCall(MachineInstr &inst) const;
+  void expandPostRAIndirectJump(MachineInstr &inst) const;
+  void expandPostRAConstantToReg(MachineInstr &inst) const;
 
 public:
   /*
@@ -81,26 +81,26 @@ public:
   // Find the last definition of reg before MI
   // Return the *operand* if found, nullptr otherwise.
   // A register may not be defined by an operand.
-  static MachineOperand *getLatestRegDef(MachineInstr &MI, Register reg);
+  static MachineOperand *getLatestRegDef(MachineInstr & inst, Register reg);
 
-  static bool isUncondBranchOpcode(const MachineInstr &MI) {
-    return MI.getOpcode() == AltairX::BRA;
+  static bool isUncondBranchOpcode(const MachineInstr &inst) {
+    return inst.getOpcode() == AltairX::BRA;
   }
 
-  static bool isCondBranchOpcode(const MachineInstr &MI) {
-    return MI.getOpcode() == AltairX::BRC ||
-           MI.getOpcode() == AltairX::PseudoBRC;
+  static bool isCondBranchOpcode(const MachineInstr &inst) {
+    return inst.getOpcode() == AltairX::BRC ||
+           inst.getOpcode() == AltairX::PseudoBRC;
   }
 
-  static bool isCompare(const MachineInstr &MI) {
-    return MI.getOpcode() == AltairX::CmpRIb ||
-           MI.getOpcode() == AltairX::CmpRIw ||
-           MI.getOpcode() == AltairX::CmpRId ||
-           MI.getOpcode() == AltairX::CmpRIq ||
-           MI.getOpcode() == AltairX::CmpRRb ||
-           MI.getOpcode() == AltairX::CmpRRw ||
-           MI.getOpcode() == AltairX::CmpRRd ||
-           MI.getOpcode() == AltairX::CmpRRq;
+  static bool isCompare(const MachineInstr &inst) {
+    return inst.getOpcode() == AltairX::CmpRIb ||
+           inst.getOpcode() == AltairX::CmpRIw ||
+           inst.getOpcode() == AltairX::CmpRId ||
+           inst.getOpcode() == AltairX::CmpRIq ||
+           inst.getOpcode() == AltairX::CmpRRb ||
+           inst.getOpcode() == AltairX::CmpRRw ||
+           inst.getOpcode() == AltairX::CmpRRd ||
+           inst.getOpcode() == AltairX::CmpRRq;
   }
 
 protected:

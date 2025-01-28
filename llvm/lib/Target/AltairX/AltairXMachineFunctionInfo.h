@@ -10,21 +10,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_ALTAIRX_MACHINEFUNCTION_H
-#define LLVM_LIB_TARGET_ALTAIRX_MACHINEFUNCTION_H
+#ifndef LLVM_LIB_TARGET_ALTAIRX_MACHINE_FUNCTION_INFO_H
+#define LLVM_LIB_TARGET_ALTAIRX_MACHINE_FUNCTION_INFO_H
 
 #include "llvm/CodeGen/MachineFunction.h"
 
 namespace llvm {
 
-/// AltairXFunctionInfo - This class is derived from MachineFunction private
-/// AltairX target-specific information for each MachineFunction.
-class AltairXFunctionInfo : public MachineFunctionInfo {
-private:
-  MachineFunction &MF;
-
+class AltairXMachineFunctionInfo : public MachineFunctionInfo {
 public:
-  AltairXFunctionInfo(MachineFunction &MF) : MF(MF) {}
+  AltairXMachineFunctionInfo(const Function &, const TargetSubtargetInfo *){};
+
+  // Used for vastart lowering
+  int VarArgsFrameIndex = 0;
 };
 
 } // end of namespace llvm

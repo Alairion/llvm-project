@@ -83,7 +83,7 @@ def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_CallSeqStart, [SDNPHasChain
 def SDT_CallSeqEnd : SDCallSeqEnd<[SDTCisVT<0, i64>, SDTCisVT<1, i64>]>;
 def callseq_end : SDNode<"ISD::CALLSEQ_END", SDT_CallSeqEnd, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
-let Defs = [R0], Uses = [R0] in {
+let Defs = [R0], Uses = [R0], hasSideEffects = 1, isCodeGenOnly = 1 in {
   def ADJCALLSTACKDOWN : AltairXPseudo<
     (outs),
     (ins i64imm:$amt1, i64imm:$amt2),
@@ -378,9 +378,6 @@ def SetFR : AltairXInstCUSetFR<
     [],
     "move", "$ri, $rs1"> {
 }
-
-//def : Pat<(add (i64 addrfi:$addr), s64imm32:$imm),
-//          (AddRIq (i64 addrfi:$addr), s64imm32:$imm)>;
 
 //===----------------------------------------------------------------------===//
 // MDU (mul, div, rem)

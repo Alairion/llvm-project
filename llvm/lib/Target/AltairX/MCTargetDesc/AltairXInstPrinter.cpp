@@ -56,20 +56,20 @@ void AltairXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
 
 void AltairXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
                                       raw_ostream &O) {
-  const MCOperand &Op = MI->getOperand(OpNo);
+  const MCOperand &op = MI->getOperand(OpNo);
 
-  if (Op.isReg()) {
-    printRegName(O, Op.getReg());
+  if (op.isReg()) {
+    printRegName(O, op.getReg());
     return;
   }
 
-  if (Op.isImm()) {
-    O << Op.getImm();
+  if (op.isImm()) {
+    O << op.getImm();
     return;
   }
 
-  assert(Op.isExpr() && "unknown operand kind in printOperand");
-  Op.getExpr()->print(O, &MAI, true);
+  assert(op.isExpr() && "unknown operand kind in printOperand");
+  op.getExpr()->print(O, &MAI, true);
 }
 
 void AltairXInstPrinter::printSingleInst(const MCInst *MI, uint64_t Address,
@@ -126,8 +126,8 @@ std::string_view SCMPCondCodeToString(AltairX::SCMPCondCode condCode) {
 
 void AltairXInstPrinter::printRelBranchTarget(const MCInst *MI, unsigned OpNo,
                                               unsigned Value, raw_ostream &O) {
-  const MCOperand &Op = MI->getOperand(OpNo);
-  Op.getExpr()->print(O, &MAI, true);
+  const MCOperand & op = MI->getOperand(OpNo);
+  op.getExpr()->print(O, &MAI, true);
 }
 
 void AltairXInstPrinter::printCondCode(const MCInst *MI, uint32_t OpIdx,
