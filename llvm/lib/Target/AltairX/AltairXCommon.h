@@ -73,6 +73,8 @@ enum InstFormat {
   InstFormatBRURelImm24 = 9,
   InstFormatBRUAbsImm24 = 10,
   InstFormatBRUIndirect = 11,
+  InstFormatCMPRegReg = 12,
+  InstFormatCMPRegImm9 = 13,
 };
 
 } // namespace llvm::AltairX

@@ -93,6 +93,8 @@ std::uint32_t immOperandIndex(const MachineInstr &inst) {
     return 0;
   case AltairX::InstFormatBRUAbsImm24:
     return 0;
+  case AltairX::InstFormatCMPRegImm9:
+    return 1;
   default:
     return noImm;
   }
@@ -116,6 +118,8 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
     return AltairX::MOVEIX24PCREL;
   case AltairX::InstFormatBRUAbsImm24:
     return AltairX::MOVEIX24ABS;
+  case AltairX::InstFormatCMPRegImm9:
+    return AltairX::MOVEIX9;
   default:
     return false;
   }

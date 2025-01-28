@@ -25,6 +25,8 @@ def InstFormatBRURelImm23 : InstFormat<8>;
 def InstFormatBRURelImm24 : InstFormat<9>;
 def InstFormatBRUAbsImm24 : InstFormat<10>;
 def InstFormatBRUIndirect : InstFormat<11>;
+def InstFormatCMPRegReg : InstFormat<12>; // cmp has a specific format
+def InstFormatCMPRegImm9 : InstFormat<13>;
 
 //===----------------------------------------------------------------------===//
 // Opcodes
@@ -247,7 +249,7 @@ class AltairXInstSExt<AltairXOpcode opcode, bits<2> size, bits<2> insize, dag ou
 }
 
 class AltairXInstCMPRR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatCMPRegReg> {
   bits<6> rs1;
   bits<6> rs2;
 
@@ -261,7 +263,7 @@ class AltairXInstCMPRR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
 }
 
 class AltairXInstCMPRI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatALURegImm9> {
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatCMPRegImm9> {
   bits<6> rs1;
   bits<9> imm;
 
