@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AltairXTargetMachine.h"
+#include "AltairXMachineFunctionInfo.h"
 #include "AltairXISelDAGToDAG.h"
 #include "AltairXSubtarget.h"
 #include "AltairXTargetObjectFile.h"
@@ -60,6 +61,13 @@ AltairXTargetMachine::AltairXTargetMachine(const Target &T, const Triple &TT,
                         getEffectiveCodeModel(CM, CodeModel::Medium), OL),
       TLOF(std::make_unique<AltairXTargetObjectFile>()) {
   initAsmInfo();
+}
+
+MachineFunctionInfo *AltairXTargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return AltairXMachineFunctionInfo::create<AltairXMachineFunctionInfo>(
+      Allocator, F, STI);
 }
 
 const AltairXSubtarget *

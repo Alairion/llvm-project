@@ -38,19 +38,19 @@ public:
   AltairXBranchPatcher();
   StringRef getPassName() const override { return "AltairX Branch Patcher"; }
 
-  void getAnalysisUsage(AnalysisUsage &AU) const override;
-  bool runOnMachineFunction(MachineFunction &F) override;
+  void getAnalysisUsage(AnalysisUsage &analysis) const override;
+  bool runOnMachineFunction(MachineFunction &func) override;
 
   static char ID;
 
 private:
-  void runOnMachineBasicBlock(MachineBasicBlock &MBB);
-  void runOnPseudoBRC(MachineBasicBlock &MBB, MachineInstr &MI);
-  void runOnCMP(MachineBasicBlock &MBB, MachineInstr &MI);
+  void runOnMachineBasicBlock(MachineBasicBlock &block);
+  void runOnPseudoBRC(MachineBasicBlock &block, MachineInstr &inst);
+  void runOnCMP(MachineBasicBlock &block, MachineInstr &inst);
 
-  const TargetMachine *TM{};
-  const AltairXInstrInfo *TII{};
-  const MachineBranchProbabilityInfo *MBPI{};
+  const TargetMachine *target{};
+  const AltairXInstrInfo *instInfo{};
+  const MachineBranchProbabilityInfo *branchInfo{};
 };
 
 } // namespace llvm

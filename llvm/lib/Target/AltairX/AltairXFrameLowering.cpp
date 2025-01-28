@@ -37,9 +37,40 @@ bool AltairXFrameLowering::hasFP(const MachineFunction &MF) const {
          TRI->hasStackRealignment(MF);
 }
 
+bool AltairXFrameLowering::hasReservedCallFrame(
+    const MachineFunction &MF) const {
+  return !MF.getFrameInfo().hasVarSizedObjects();
+}
+
 MachineBasicBlock::iterator AltairXFrameLowering::eliminateCallFramePseudoInstr(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator I) const {
+  if (!hasReservedCallFrame(MF)) {
+    // If space has not been reserved for a call frame, ADJCALLSTACKDOWN and
+    // ADJCALLSTACKUP must be converted to instructions manipulating the stack
+    // pointer. This is necessary when there is a variable length stack
+    // allocation (e.g. alloca), which means it's not possible to allocate
+    // space for outgoing arguments from within the function prologue.
+    int64_t amount = I->getOperand(0).getImm();
+
+    if (amount != 0) {
+      // Ensure the stack remains aligned after adjustment.
+      amount = alignSPAdjust(amount);
+
+      const auto opcode = I->getOpcode();
+      if (opcode == AltairX::ADJCALLSTACKDOWN) {
+        amount = -amount;
+      } else if (opcode != AltairX::ADJCALLSTACKUP) {
+        llvm_unreachable("Unexpected opcode in eliminateCallFramePseudoInstr");
+      }
+
+      auto* TII = MF.getSubtarget().getInstrInfo();
+      BuildMI(MBB, I, I->getDebugLoc(), TII->get(AltairX::AddRIq), AltairX::R0)
+          .addReg(AltairX::R0)
+          .addImm(amount);
+    }
+  }
+
   return MBB.erase(I);
 }
 
@@ -160,11 +191,6 @@ void AltairXFrameLowering::emitEpilogue(MachineFunction &MF,
   BuildMI(MBB, MBBI, DebugLoc{}, TII.get(AltairX::AddRIq), stackReg)
       .addReg(stackReg)
       .addImm(stackSize);
-}
-
-bool AltairXFrameLowering::hasReservedCallFrame(
-    const MachineFunction &MF) const {
-  return true;
 }
 
 // This method is called immediately before PrologEpilogInserter scans the

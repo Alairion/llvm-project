@@ -12,7 +12,6 @@
 
 #include "AltairXSubtarget.h"
 #include "AltairX.h"
-#include "AltairXMachineFunction.h"
 #include "AltairXRegisterInfo.h"
 #include "AltairXTargetMachine.h"
 #include "llvm/IR/Attributes.h"

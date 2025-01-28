@@ -33,6 +33,10 @@ public:
                        std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
                        bool JIT);
 
+  MachineFunctionInfo *
+  createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,
+                            const TargetSubtargetInfo *STI) const;
+
   const AltairXSubtarget *getSubtargetImpl(const Function &F) const override;
   const AltairXSubtarget *getSubtargetImpl() const = delete;
 
