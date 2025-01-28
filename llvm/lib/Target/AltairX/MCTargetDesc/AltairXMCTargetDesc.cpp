@@ -76,13 +76,13 @@ static MCAsmBackend *createAltairXMCAsmBackend(const Target &T,
 static MCAsmInfo *createAltairXMCAsmInfo(const MCRegisterInfo &MRI,
                                        const Triple &TT,
                                        const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new AltairXMCAsmInfo(TT);
+  MCAsmInfo *asmInfo = new AltairXMCAsmInfo(TT);
 
-  unsigned WP = MRI.getDwarfRegNum(AltairX::R1, true);
-  MCCFIInstruction Inst = MCCFIInstruction::createDefCfaRegister(nullptr, WP);
-  MAI->addInitialFrameState(Inst);
+  unsigned reg = MRI.getDwarfRegNum(AltairX::R1, true);
+  MCCFIInstruction inst = MCCFIInstruction::createDefCfaRegister(nullptr, reg);
+  asmInfo->addInitialFrameState(inst);
 
-  return MAI;
+  return asmInfo;
 }
 
 static MCCodeEmitter *createAltairXMCCodeEmitter(const MCInstrInfo &II,
@@ -91,20 +91,21 @@ static MCCodeEmitter *createAltairXMCCodeEmitter(const MCInstrInfo &II,
 }
 
 extern "C" void LLVMInitializeAltairXTargetMC() {
-  Target* T = &getTheAltairXTarget();
+  Target *target = &getTheAltairXTarget();
 
   // Register the MCCodeEmitter
-  TargetRegistry::RegisterMCAsmBackend(*T, createAltairXMCAsmBackend);
+  TargetRegistry::RegisterMCAsmBackend(*target, createAltairXMCAsmBackend);
   // Register the MC asm info.
-  TargetRegistry::RegisterMCAsmInfo(*T, createAltairXMCAsmInfo);
+  TargetRegistry::RegisterMCAsmInfo(*target, createAltairXMCAsmInfo);
   // Register the MC instruction info.
-  TargetRegistry::RegisterMCInstrInfo(*T, createAltairXMCInstrInfo);
+  TargetRegistry::RegisterMCInstrInfo(*target, createAltairXMCInstrInfo);
   // Register the MC register info.
-  TargetRegistry::RegisterMCRegInfo(*T, createAltairXMCRegisterInfo);
+  TargetRegistry::RegisterMCRegInfo(*target, createAltairXMCRegisterInfo);
   // Register the MC subtarget info.
-  TargetRegistry::RegisterMCSubtargetInfo(*T, createAltairXMCSubtargetInfo);
+  TargetRegistry::RegisterMCSubtargetInfo(*target,
+                                          createAltairXMCSubtargetInfo);
   // Register the MCInstPrinter.
-  TargetRegistry::RegisterMCInstPrinter(*T, createAltairXMCInstPrinter);
+  TargetRegistry::RegisterMCInstPrinter(*target, createAltairXMCInstPrinter);
   // Register the MCCodeEmitter
-  TargetRegistry::RegisterMCCodeEmitter(*T, createAltairXMCCodeEmitter);
+  TargetRegistry::RegisterMCCodeEmitter(*target, createAltairXMCCodeEmitter);
 }

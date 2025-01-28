@@ -24,18 +24,18 @@ bool AltairXDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
   return SelectionDAGISel::runOnMachineFunction(MF);
 }
 
-bool AltairXDAGToDAGISel::doesImplicitTruncate(unsigned Opcode) const noexcept {
-  return Opcode != ISD::TRUNCATE && Opcode != TargetOpcode::EXTRACT_SUBREG &&
-         Opcode != ISD::CopyFromReg && Opcode != ISD::AssertSext &&
-         Opcode != ISD::AssertZext && Opcode != ISD::AssertAlign &&
-         Opcode != ISD::FREEZE;
+bool AltairXDAGToDAGISel::doesImplicitTruncate(unsigned opcode) const noexcept {
+  return opcode != ISD::TRUNCATE && opcode != TargetOpcode::EXTRACT_SUBREG &&
+         opcode != ISD::CopyFromReg && opcode != ISD::AssertSext &&
+         opcode != ISD::AssertZext && opcode != ISD::AssertAlign &&
+         opcode != ISD::FREEZE;
 }
 
-bool AltairXDAGToDAGISel::outputsInMDUReg(unsigned Opcode) const noexcept {
-  return Opcode == ISD::MUL || Opcode == ISD::SDIV || Opcode == ISD::UDIV ||
-         Opcode == ISD::SREM || Opcode == ISD::UREM ||
-         Opcode == ISD::SMUL_LOHI || Opcode == ISD::UMUL_LOHI ||
-         Opcode == ISD::SDIVREM || Opcode == ISD::UDIVREM;
+bool AltairXDAGToDAGISel::outputsInMDUReg(unsigned opcode) const noexcept {
+  return opcode == ISD::MUL || opcode == ISD::SDIV || opcode == ISD::UDIV ||
+         opcode == ISD::SREM || opcode == ISD::UREM ||
+         opcode == ISD::SMUL_LOHI || opcode == ISD::UMUL_LOHI ||
+         opcode == ISD::SDIVREM || opcode == ISD::UDIVREM;
 }
 
 namespace {
@@ -68,7 +68,7 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base, SDValue &Offset,
   //    return false;
   //}
 
-  SDLoc DL{N};
+  SDLoc dl{N};
 
   if (N.getOpcode() != ISD::ADD) {
     return false;
@@ -81,14 +81,14 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base, SDValue &Offset,
   if (auto matchedShift = selectAddrRRShift(right); matchedShift) {
     Base = left;
     Offset = right.getOperand(0);
-    Shift = CurDAG->getTargetConstant(*matchedShift, DL, MVT::i64);
+    Shift = CurDAG->getTargetConstant(*matchedShift, dl, MVT::i64);
     return true;
   }
 
   if (auto matchedShift = selectAddrRRShift(left); matchedShift) {
     Base = right;
     Offset = left.getOperand(0);
-    Shift = CurDAG->getTargetConstant(*matchedShift, DL, MVT::i64);
+    Shift = CurDAG->getTargetConstant(*matchedShift, dl, MVT::i64);
     return true;
   }
 
@@ -96,7 +96,7 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base, SDValue &Offset,
   if (!isa<ConstantSDNode>(right)) {
     Base = left;
     Offset = right;
-    Shift = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    Shift = CurDAG->getTargetConstant(0, dl, MVT::i64);
     return true;
   }
 
@@ -106,12 +106,12 @@ bool AltairXDAGToDAGISel::selectAddr(SDValue N, SDValue &Base, SDValue &Offset,
 bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
                                         SDValue &Offset) const {
   // Load at given address directly
-  SDLoc DL{N};
+  SDLoc dl{N};
 
   if (N.getOpcode() == ISD::FrameIndex) {
     auto *node = cast<FrameIndexSDNode>(N);
     Base = CurDAG->getTargetFrameIndex(node->getIndex(), MVT::i64);
-    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    Offset = CurDAG->getTargetConstant(0, dl, MVT::i64);
     return true;
   }
 
@@ -123,7 +123,7 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
 
   if (N.getOpcode() != ISD::ADD) {
     Base = N;
-    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    Offset = CurDAG->getTargetConstant(0, dl, MVT::i64);
     return true;
   }
 
@@ -134,7 +134,7 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
     const auto constval = value->getSExtValue();
     if (isInt<32>(constval)) {
       Base = left;
-      Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
+      Offset = CurDAG->getTargetConstant(constval, dl, MVT::i64);
       return true;
     }
   }
@@ -143,7 +143,7 @@ bool AltairXDAGToDAGISel::selectAddrImm(SDValue N, SDValue &Base,
     const auto constval = value->getSExtValue();
     if (isInt<32>(constval)) {
       Base = right;
-      Offset = CurDAG->getTargetConstant(constval, DL, MVT::i64);
+      Offset = CurDAG->getTargetConstant(constval, dl, MVT::i64);
       return true;
     }
   }

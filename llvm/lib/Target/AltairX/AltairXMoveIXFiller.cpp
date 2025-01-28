@@ -37,11 +37,11 @@ AltairXMoveIXFiller::AltairXMoveIXFiller() : MachineFunctionPass(ID) {
   initializeAltairXMoveIXFillerPass(*PassRegistry::getPassRegistry());
 }
 
-bool AltairXMoveIXFiller::runOnMachineFunction(MachineFunction &F) {
-  TM = &F.getTarget();
-  TII = F.getSubtarget<AltairXSubtarget>().getInstrInfo();
-  for (auto &MBB : F) {
-    runOnMachineBasicBlock(MBB);
+bool AltairXMoveIXFiller::runOnMachineFunction(MachineFunction &func) {
+  target = &func.getTarget();
+  instInfo = func.getSubtarget<AltairXSubtarget>().getInstrInfo();
+  for (auto &block : func) {
+    runOnMachineBasicBlock(block);
   }
 
   return false;
@@ -125,16 +125,16 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
 
 // add operand ranges to fix unexpected moveix (ex shift on loadrr)
 
-void AltairXMoveIXFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
-  for (auto it = MBB.begin(); it != MBB.end(); ++it) {
+void AltairXMoveIXFiller::runOnMachineBasicBlock(MachineBasicBlock &block) {
+  for (auto it = block.begin(); it != block.end(); ++it) {
     const auto immIndex = immOperandIndex(*it);
     if (immIndex == noImm) {
       continue;
     }
 
     const auto makeBuilder = [&]() {
-      return BuildMI(MBB, std::next(it), it->getDebugLoc(),
-                     TII->get(getMoveIX(*it)));
+      return BuildMI(block, std::next(it), it->getDebugLoc(),
+                     instInfo->get(getMoveIX(*it)));
     };
 
     llvm::MachineInstr *moveix{nullptr};
@@ -149,9 +149,8 @@ void AltairXMoveIXFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
 
     if (moveix) {
       moveix->bundleWithPred();
-      finalizeBundle(MBB, it.getInstrIterator(),
+      finalizeBundle(block, it.getInstrIterator(),
                      std::next(moveix->getIterator()));
-      ++it; // skip newly created instruction!
     }
   }
 }
