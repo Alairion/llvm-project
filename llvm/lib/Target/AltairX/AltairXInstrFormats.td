@@ -16,16 +16,18 @@ class InstFormat<bits<64> val> {
 def InstFormatPseudo : InstFormat<0>;
 def InstFormatMoveImm18 : InstFormat<1>;
 def InstFormatRegReg : InstFormat<2>; // two inputs, single output (ALU, LSU, MDU, FPU, EFU)
-def InstFormatUnary : InstFormat<3>; // single input, single output (FPU)
-def InstFormatALURegImm9 : InstFormat<4>;
-def InstFormatLSURegImm10 : InstFormat<5>;
-def InstFormatFPURegImm16 : InstFormat<6>;
-def InstFormatBRURelImm23 : InstFormat<7>;
-def InstFormatBRURelImm24 : InstFormat<8>;
-def InstFormatBRUAbsImm24 : InstFormat<9>;
-def InstFormatBRUIndirect : InstFormat<10>;
-def InstFormatCMPRegReg : InstFormat<11>; // cmp has a specific format
-def InstFormatCMPRegImm9 : InstFormat<12>;
+def InstFormatRegRegReg : InstFormat<3>; // three inputs, single output (cmove)
+def InstFormatUnary : InstFormat<4>; // single input, single output (FPU)
+def InstFormatALURegImm9 : InstFormat<5>;
+def InstFormatALURegRegImm9 : InstFormat<3>; // used by conditional moves
+def InstFormatLSURegImm10 : InstFormat<7>;
+def InstFormatFPURegImm16 : InstFormat<8>;
+def InstFormatBRURelImm23 : InstFormat<9>;
+def InstFormatBRURelImm24 : InstFormat<10>;
+def InstFormatBRUAbsImm24 : InstFormat<11>;
+def InstFormatBRUIndirect : InstFormat<12>;
+def InstFormatCMPRegReg : InstFormat<13>; // cmp has a specific format
+def InstFormatCMPRegImm9 : InstFormat<14>;
 
 //===----------------------------------------------------------------------===//
 // Opcodes
@@ -53,6 +55,8 @@ def OPCODE_INS : AltairXOpcodeALU0<0b1110>;
 
 def OPCODE_ADDS : AltairXOpcodeALU0<0b0001>;
 def OPCODE_SUBS : AltairXOpcodeALU0<0b1001>;
+def OPCODE_RTL  : AltairXOpcodeALU0<0b0101>;
+def OPCODE_RTR  : AltairXOpcodeALU0<0b1101>;
 
 def OPCODE_CMP  : AltairXOpcodeALU0<0b0011>;
 def OPCODE_TEST : AltairXOpcodeALU0<0b1011>;
@@ -262,6 +266,16 @@ class AltairXInstALURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Inst{10} = 1;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
+}
+
+class AltairXInstALURRR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInstALURR<opcode, size, outs, ins, pattern, opcodestr, argstr> {
+    let TSFlags = InstFormatRegRegReg.Value;
+}
+
+class AltairXInstALURRI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInstALURI<opcode, size, outs, ins, pattern, opcodestr, argstr> {
+    let TSFlags = InstFormatALURegRegImm9.Value;
 }
 
 class AltairXInstSExt<AltairXOpcode opcode, bits<2> size, bits<2> insize, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 

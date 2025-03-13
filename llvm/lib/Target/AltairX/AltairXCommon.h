@@ -61,19 +61,21 @@ enum class SCMPCondCode : std::uint32_t {
 
 // in instruction descr TSFlags
 enum InstFormat {
-  InstFormatPseudo = 0,
-  InstFormatMoveImm18 = 1,
-  InstFormatRegReg = 2,
-  InstFormatUnary = 3,
-  InstFormatALURegImm9 = 4,
-  InstFormatLSURegImm10 = 5,
-  InstFormatFPURegImm16 = 6,
-  InstFormatBRURelImm23 = 7,
-  InstFormatBRURelImm24 = 8,
-  InstFormatBRUAbsImm24 = 9,
-  InstFormatBRUIndirect = 10,
-  InstFormatCMPRegReg = 11,
-  InstFormatCMPRegImm9 = 12,
+  InstFormatPseudo,
+  InstFormatMoveImm18,
+  InstFormatRegReg,
+  InstFormatRegRegReg,
+  InstFormatUnary,
+  InstFormatALURegImm9,
+  InstFormatALURegRegImm9,
+  InstFormatLSURegImm10,
+  InstFormatFPURegImm16,
+  InstFormatBRURelImm23,
+  InstFormatBRURelImm24,
+  InstFormatBRUAbsImm24,
+  InstFormatBRUIndirect,
+  InstFormatCMPRegReg,
+  InstFormatCMPRegImm9,
 };
 
 } // namespace llvm::AltairX
