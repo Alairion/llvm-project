@@ -20,6 +20,8 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 
+#define DEBUG_TYPE "moveix-filler"
+
 namespace llvm {
 
 char AltairXMoveIXFiller::ID = 0;
@@ -57,8 +59,6 @@ bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
     return llvm::isInt<9>(imm);
   case AltairX::InstFormatLSURegImm10:
     return llvm::isInt<10>(imm);
-  case AltairX::InstFormatLSURegImm16:
-    return llvm::isUInt<16>(static_cast<std::uint64_t>(imm));
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
   case AltairX::InstFormatBRURelImm23:
@@ -75,6 +75,7 @@ bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
 
 inline constexpr std::uint32_t noImm =
     std::numeric_limits<std::uint32_t>::max();
+
 std::uint32_t immOperandIndex(const MachineInstr &inst) {
   switch (inst.getDesc().TSFlags) {
   case AltairX::InstFormatMoveImm18:
@@ -83,14 +84,12 @@ std::uint32_t immOperandIndex(const MachineInstr &inst) {
     return 2;
   case AltairX::InstFormatLSURegImm10:
     return 2;
-  case AltairX::InstFormatLSURegImm16:
-    return 1;
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
   case AltairX::InstFormatBRURelImm23:
-    return 0;
+    return noImm; // assume always in range (add option?)
   case AltairX::InstFormatBRURelImm24:
-    return 0;
+    return noImm; // assume always in range (add option?)
   case AltairX::InstFormatBRUAbsImm24:
     return 0;
   case AltairX::InstFormatCMPRegImm9:
@@ -108,8 +107,6 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
     return AltairX::MOVEIX9;
   case AltairX::InstFormatLSURegImm10:
     return AltairX::MOVEIX10;
-  case AltairX::InstFormatLSURegImm16:
-    llvm_unreachable("LDP/STP must not be matched if imm exceed 16-bits!");
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
   case AltairX::InstFormatBRURelImm23:
@@ -124,6 +121,8 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
     return false;
   }
 }
+
+
 
 } // namespace
 
@@ -147,8 +146,17 @@ void AltairXMoveIXFiller::runOnMachineBasicBlock(MachineBasicBlock &block) {
       moveix = makeBuilder().addGlobalAddress(op.getGlobal()).getInstr();
     } else if (op.isJTI()) {
       moveix = makeBuilder().addJumpTableIndex(op.getIndex()).getInstr();
-    } else if (op.isImm() && !fitsImm(*it, op.getImm())) {
-      moveix = makeBuilder().addImm(op.getImm()).getInstr();
+    } else if (op.isCPI()) {
+      moveix = makeBuilder().addConstantPoolIndex(op.getIndex()).getInstr();
+    } else if (op.isImm()) {
+      if (!fitsImm(*it, op.getImm())) {
+        moveix = makeBuilder().addImm(op.getImm()).getInstr();
+      }
+    } else if (op.isMBB()) {
+      moveix = makeBuilder().addMBB(op.getMBB()).getInstr();
+    } else {
+      LLVM_DEBUG(it->dump());
+      llvm_unreachable("Unsupported immediate type!");
     }
 
     if (moveix) {

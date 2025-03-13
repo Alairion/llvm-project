@@ -39,14 +39,14 @@ private:
   void expandPostRAIndirectCall(MachineInstr &inst) const;
   void expandPostRAIndirectJump(MachineInstr &inst) const;
   void expandPostRAConstantToReg(MachineInstr &inst) const;
+  // All bitcasts can be handled with add + fmove
+  // Caller must provide the right opcodes for the register class in use
+  void makeBitcastToFloat(MachineInstr &inst, uint32_t add,
+                          uint32_t fmove) const;
+  void makeBitcastToInt(MachineInstr &inst, uint32_t add, uint32_t fmove) const;
+  void expandPostRABitcast(MachineInstr& inst) const;
 
 public:
-  /*
-  MachineInstr* foldMemoryOperandImpl(
-    MachineFunction& MF, MachineInstr& MI, ArrayRef<unsigned> Ops,
-    MachineBasicBlock::iterator InsertPt, int FrameIndex,
-    LiveIntervals* LIS, VirtRegMap* VRM) const override;
-  */
   void storeRegToStackSlot(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MI, Register SrcReg,
                            bool isKill, int FrameIndex,
@@ -92,7 +92,7 @@ public:
            inst.getOpcode() == AltairX::PseudoBRC;
   }
 
-  static bool isCompare(const MachineInstr &inst) {
+  static bool isCmp(const MachineInstr &inst) {
     return inst.getOpcode() == AltairX::CmpRIb ||
            inst.getOpcode() == AltairX::CmpRIw ||
            inst.getOpcode() == AltairX::CmpRId ||
@@ -101,6 +101,15 @@ public:
            inst.getOpcode() == AltairX::CmpRRw ||
            inst.getOpcode() == AltairX::CmpRRd ||
            inst.getOpcode() == AltairX::CmpRRq;
+  }
+
+  static bool isFCmp(const MachineInstr& inst) {
+    return inst.getOpcode() == AltairX::FCmpRRs ||
+           inst.getOpcode() == AltairX::FCmpRRd;
+  }
+
+  static bool isAnyCmp(const MachineInstr &inst) {
+    return isCmp(inst) || isFCmp(inst);
   }
 
 protected:

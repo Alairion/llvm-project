@@ -41,8 +41,8 @@ AltairXRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
   return AltairX_CalleeSavedRegs_RegMask;
 }
 
-const TargetRegisterClass *AltairXRegisterInfo::intRegClass(unsigned int Size) {
-  switch (Size) {
+const TargetRegisterClass *AltairXRegisterInfo::intRegClass(unsigned int size) {
+  switch (size) {
   case 8:
     return &AltairX::GPIReg8RegClass;
   case 16:
@@ -52,12 +52,60 @@ const TargetRegisterClass *AltairXRegisterInfo::intRegClass(unsigned int Size) {
   case 64:
     return &AltairX::GPIReg64RegClass;
   default:
-    return nullptr;
+    llvm_unreachable("Unsuported int size!");
   }
 }
 
-const TargetRegisterClass *AltairXRegisterInfo::MVTRegClass(MVT Type) {
-  return intRegClass(Type.getSizeInBits());
+const TargetRegisterClass* AltairXRegisterInfo::floatRegClass(unsigned int size)
+{
+  switch(size) {
+  case 32:
+    return &AltairX::FReg32RegClass;
+  case 64:
+    return &AltairX::FReg64RegClass;
+  default:
+    llvm_unreachable("Unsuported float size!");
+  }
+}
+
+const TargetRegisterClass *AltairXRegisterInfo::MVTRegClass(MVT type) {
+  if (type.isFloatingPoint()) {
+    return floatRegClass(type.getSizeInBits());
+  }
+
+  return intRegClass(type.getSizeInBits());
+}
+
+bool AltairXRegisterInfo::isGPIReg(Register reg) {
+  return AltairX::GPIReg64RegClass.contains(reg) ||
+         AltairX::GPIReg32RegClass.contains(reg) ||
+         AltairX::GPIReg16RegClass.contains(reg) ||
+         AltairX::GPIReg8RegClass.contains(reg);
+}
+
+bool AltairXRegisterInfo::isFReg(Register reg) {
+  return AltairX::FReg32RegClass.contains(reg) ||
+         AltairX::FReg64RegClass.contains(reg);
+}
+
+bool AltairXRegisterInfo::isVIReg(Register reg) {
+  return AltairX::VIReg8RegClass.contains(reg);
+}
+
+bool AltairXRegisterInfo::isMDUReg(Register reg) {
+  return AltairX::MDUReg64RegClass.contains(reg) ||
+         AltairX::MDUReg32RegClass.contains(reg) ||
+         AltairX::MDUReg16RegClass.contains(reg) ||
+         AltairX::MDUReg8RegClass.contains(reg);
+}
+
+bool AltairXRegisterInfo::isRIReg(Register reg) {
+  return AltairX::RIReg32RegClass.contains(reg);
+}
+
+bool AltairXRegisterInfo::isEFReg(Register reg) {
+  return AltairX::EFReg32RegClass.contains(reg) ||
+         AltairX::EFReg64RegClass.contains(reg);
 }
 
 BitVector
@@ -80,58 +128,25 @@ namespace {
 
 bool isSpill(std::uint32_t opcode) {
   static constexpr std::array validOpcodes = {
-      AltairX::SPILLb,   AltairX::SPILLw,   AltairX::SPILLd,
-      AltairX::SPILLq,   AltairX::StoreRIb, AltairX::StoreRIw,
-      AltairX::StoreRId, AltairX::StoreRIq};
+      AltairX::StoreRIb, AltairX::StoreRIw,
+      AltairX::StoreRId, AltairX::StoreRIq,
+      AltairX::FStoreRIs, AltairX::FStoreRId};
   return std::find(validOpcodes.begin(), validOpcodes.end(), opcode) !=
          validOpcodes.end();
 }
 
 bool isReload(std::uint32_t opcode) {
   static constexpr std::array validOpcodes = {
-      AltairX::RELOADb,     AltairX::RELOADw,     AltairX::RELOADd,
-      AltairX::RELOADq,     AltairX::LoadRIb,     AltairX::LoadRIw,
-      AltairX::LoadRId,     AltairX::LoadRIq,     AltairX::LoadSExtRIb,
-      AltairX::LoadSExtRIw, AltairX::LoadSExtRId, AltairX::LoadRIbAX16,
-      AltairX::LoadRIbAX32, AltairX::LoadRIbAX64, AltairX::LoadRIwAX32,
-      AltairX::LoadRIwAX64, AltairX::LoadRIdAX64, AltairX::LoadRIbZX16,
-      AltairX::LoadRIbZX32, AltairX::LoadRIbZX64, AltairX::LoadRIwZX32,
-      AltairX::LoadRIwZX64, AltairX::LoadRIdZX64};
+      AltairX::LoadRIb,     AltairX::LoadRIw,     AltairX::LoadRId,
+      AltairX::LoadRIq,     AltairX::LoadSExtRIb, AltairX::LoadSExtRIw,
+      AltairX::LoadSExtRId, AltairX::LoadRIbAX16, AltairX::LoadRIbAX32,
+      AltairX::LoadRIbAX64, AltairX::LoadRIwAX32, AltairX::LoadRIwAX64,
+      AltairX::LoadRIdAX64, AltairX::LoadRIbZX16, AltairX::LoadRIbZX32,
+      AltairX::LoadRIbZX64, AltairX::LoadRIwZX32, AltairX::LoadRIwZX64,
+      AltairX::LoadRIdZX64, AltairX::FLoadRIs,    AltairX::FLoadRId};
 
   return std::find(validOpcodes.begin(), validOpcodes.end(), opcode) !=
          validOpcodes.end();
-}
-
-std::uint32_t getSpillStoreRI(std::uint32_t opcode) {
-  switch (opcode) {
-  case AltairX::SPILLb:
-    return AltairX::StoreRIb;
-  case AltairX::SPILLw:
-    return AltairX::StoreRIw;
-  case AltairX::SPILLd:
-    return AltairX::StoreRId;
-  case AltairX::SPILLq:
-    return AltairX::StoreRIq;
-  default:
-    assert(isSpill(opcode) && "Invalid spill instruction");
-    return opcode; // return identity for StoreRIs
-  }
-}
-
-std::uint32_t getReloadLoadRI(std::uint32_t opcode) {
-  switch (opcode) {
-  case AltairX::RELOADb:
-    return AltairX::LoadRIb;
-  case AltairX::RELOADw:
-    return AltairX::LoadRIw;
-  case AltairX::RELOADd:
-    return AltairX::LoadRId;
-  case AltairX::RELOADq:
-    return AltairX::LoadRIq;
-  default:
-    assert(isReload(opcode) && "Invalid spill instruction");
-    return opcode; // return identity for LoadRIs
-  }
 }
 
 void replaceFrameIndex(MachineBasicBlock::iterator II,
@@ -149,20 +164,19 @@ void replaceFrameIndex(MachineBasicBlock::iterator II,
   const auto opcode = inst.getOpcode();
   DebugLoc dl = inst.getDebugLoc();
 
-  // Handle StoreRIs too. They may be generated by load on stack args (since
-  // they aren't spills)
   if (isSpill(opcode)) {
-    BuildMI(block, II, dl, TII.get(getSpillStoreRI(opcode)))
+    BuildMI(block, II, dl, TII.get(opcode))
         .addReg(Reg, getKillRegState(inst.getOperand(0).isKill()))
         .addReg(FrameReg, 0)
         .addImm(Offset)
         .addMemOperand(*inst.memoperands_begin());
   } else if (isReload(opcode)) {
-    BuildMI(block, II, dl, TII.get(getReloadLoadRI(opcode)), Reg)
+    BuildMI(block, II, dl, TII.get(opcode), Reg)
         .addReg(FrameReg, 0)
         .addImm(Offset)
         .addMemOperand(*inst.memoperands_begin());
   } else if (opcode == AltairX::AddRIq) {
+    // This handles frameindex addr computation
     BuildMI(block, II, dl, TII.get(AltairX::AddRIq), Reg)
         .addReg(FrameReg, 0)
         .addImm(Offset);

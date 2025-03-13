@@ -35,14 +35,11 @@ using namespace llvm;
 #include "AltairXGenDFAPacketizer.inc"
 #include "AltairXGenInstrInfo.inc"
 
-namespace {
+AltairXInstrInfo::AltairXInstrInfo(const AltairXSubtarget &STI)
+    : AltairXGenInstrInfo(AltairX::ADJCALLSTACKDOWN, AltairX::ADJCALLSTACKUP),
+      Subtarget(STI) {}
 
-bool isGPIReg(MCRegister reg) {
-  return AltairX::GPIReg64RegClass.contains(reg) ||
-         AltairX::GPIReg32RegClass.contains(reg) ||
-         AltairX::GPIReg16RegClass.contains(reg) ||
-         AltairX::GPIReg8RegClass.contains(reg);
-}
+namespace {
 
 uint32_t getGPIRegCopy(MCRegister reg) {
   if (AltairX::GPIReg64RegClass.contains(reg)) {
@@ -58,11 +55,14 @@ uint32_t getGPIRegCopy(MCRegister reg) {
   llvm_unreachable("Wrong register class");
 }
 
-bool isMDUReg(MCRegister reg) {
-  return AltairX::MDUReg64RegClass.contains(reg) ||
-         AltairX::MDUReg32RegClass.contains(reg) ||
-         AltairX::MDUReg16RegClass.contains(reg) ||
-         AltairX::MDUReg8RegClass.contains(reg);
+uint32_t getFRegCopy(MCRegister reg) {
+  if (AltairX::FReg64RegClass.contains(reg)) {
+    return AltairX::FMoveRd;
+  } else if (AltairX::FReg32RegClass.contains(reg)) {
+    return AltairX::FMoveRs;
+  }
+
+  llvm_unreachable("Wrong register class");
 }
 
 uint32_t getGPIRegToMDURegCopy(MCRegister reg) {
@@ -93,8 +93,6 @@ uint32_t getMDURegToGPIRegCopy(MCRegister reg) {
   llvm_unreachable("Wrong register class");
 }
 
-bool isRIReg(MCRegister reg) { return AltairX::RIReg32RegClass.contains(reg); }
-
 uint32_t getGPIRegToRIRegCopy(MCRegister reg) {
   if (AltairX::RIReg32RegClass.contains(reg)) {
     return AltairX::SetFR;
@@ -111,57 +109,152 @@ uint32_t getRIRegToGPIRegCopy(MCRegister reg) {
   llvm_unreachable("Wrong register class");
 }
 
-} // namespace
+uint32_t getFRegToEFRegCopy(MCRegister reg) {
+  if (AltairX::FReg32RegClass.contains(reg)) {
+    return AltairX::SetEFs;
+  } else if (AltairX::FReg64RegClass.contains(reg)) {
+    return AltairX::SetEFd;
+  }
 
-AltairXInstrInfo::AltairXInstrInfo(const AltairXSubtarget &STI)
-    : AltairXGenInstrInfo(AltairX::ADJCALLSTACKDOWN, AltairX::ADJCALLSTACKUP),
-      Subtarget(STI) {}
+  llvm_unreachable("Wrong register class");
+}
+
+uint32_t getEFRegToFRegCopy(MCRegister reg) {
+  if (AltairX::FReg32RegClass.contains(reg)) {
+    return AltairX::GetEFs;
+  } else if (AltairX::FReg64RegClass.contains(reg)) {
+    return AltairX::GetEFd;
+  }
+
+  llvm_unreachable("Wrong register class");
+}
+
+uint32_t getSpecialRegCopyOpcode(MCRegister dest, MCRegister src) {
+  using Info = AltairXRegisterInfo;
+  if (Info::isMDUReg(dest) && Info::isGPIReg(src)) { // SetMD
+    return getGPIRegToMDURegCopy(dest);
+  } else if (Info::isGPIReg(dest) && Info::isMDUReg(src)) { // GetMD
+    return getMDURegToGPIRegCopy(src);
+  } else if (Info::isRIReg(dest) && Info::isGPIReg(src)) { // SetFR
+    return getGPIRegToRIRegCopy(dest);
+  } else if (Info::isGPIReg(dest) && Info::isRIReg(src)) { // GetRI
+    return getRIRegToGPIRegCopy(src);
+  } else if (Info::isEFReg(dest) && Info::isFReg(src)) { // SetEF
+    return getFRegToEFRegCopy(src);
+  } else if (Info::isFReg(dest) && Info::isEFReg(src)) { // GetEF
+    return getEFRegToFRegCopy(dest);
+  } else {
+    llvm_unreachable("Unsuported physical reg copy");
+  }
+}
+
+uint32_t getBitcastAdd(MCRegister reg) {
+  if (AltairX::GPIReg64RegClass.contains(reg)) {
+    return AltairX::AddRIq;
+  } else if (AltairX::GPIReg32RegClass.contains(reg)) {
+    return AltairX::AddRId;
+  } else if (AltairX::GPIReg8RegClass.contains(reg)) {
+    return AltairX::AddRIb;
+  }
+
+  llvm_unreachable("Wrong register class");
+}
+uint32_t getBitcastFMove(MCRegister reg) {
+
+  if (AltairX::FReg64RegClass.contains(reg)) {
+    return AltairX::FMoveRd;
+  } else if (AltairX::FReg32RegClass.contains(reg)) {
+    return AltairX::FMoveRs;
+  } else if (AltairX::VIReg8RegClass.contains(reg)) {
+    return AltairX::VIMoveRb;
+  }
+
+  llvm_unreachable("Wrong register class");
+}
+
+} // namespace
 
 void AltairXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                    MachineBasicBlock::iterator MI,
                                    const DebugLoc &DL, MCRegister DestReg,
                                    MCRegister SrcReg, bool KillSrc) const {
-  if (isMDUReg(DestReg) && isGPIReg(SrcReg)) { // MOVEQR
-    BuildMI(MBB, MI, DL, get(getGPIRegToMDURegCopy(DestReg)), DestReg)
-        .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (isGPIReg(DestReg) && isMDUReg(SrcReg)) { // MOVERQ
-    BuildMI(MBB, MI, DL, get(getMDURegToGPIRegCopy(SrcReg)), DestReg)
-        .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (isRIReg(DestReg) && isGPIReg(SrcReg)) { // MOVEIR
-    BuildMI(MBB, MI, DL, get(getGPIRegToRIRegCopy(DestReg)), DestReg)
-        .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (isGPIReg(DestReg) && isRIReg(SrcReg)) { // MOVERI
-    BuildMI(MBB, MI, DL, get(getRIRegToGPIRegCopy(SrcReg)), DestReg)
-        .addReg(SrcReg, getKillRegState(KillSrc));
-  } else if (isGPIReg(DestReg) && isGPIReg(SrcReg)) { // ADDI r, 0
+  using Info = AltairXRegisterInfo;
+  if (Info::isGPIReg(DestReg) && Info::isGPIReg(SrcReg)) { // Add r, 0
     BuildMI(MBB, MI, DL, get(getGPIRegCopy(DestReg)), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
         .addImm(0);
+  } else if (Info::isFReg(DestReg) && Info::isFReg(SrcReg)) { // FMove r
+    BuildMI(MBB, MI, DL, get(getFRegCopy(DestReg)), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+  } else if (Info::isGPIReg(DestReg) && Info::isVIReg(SrcReg)) { // bitcast
+    makeBitcastToInt(*MI, getBitcastAdd(DestReg), getBitcastFMove(SrcReg));
+  } else if (Info::isVIReg(DestReg) && Info::isGPIReg(SrcReg)) { // bitcast
+    makeBitcastToFloat(*MI, getBitcastAdd(SrcReg), getBitcastFMove(DestReg));
   } else {
-    llvm_unreachable("Unsuported physical reg copy");
+    // Special registers moves (EF, RI, ...)
+    BuildMI(MBB, MI, DL, get(getSpecialRegCopyOpcode(DestReg, SrcReg)), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrc));
   }
 }
-/*
-MachineInstr *AltairXInstrInfo::foldMemoryOperandImpl(
-    MachineFunction &MF, MachineInstr &MI, ArrayRef<unsigned> Ops,
-    MachineBasicBlock::iterator InsertPt, int FrameIndex, LiveIntervals *LIS,
-    VirtRegMap *VRM) const {
-  Register DstReg = MI.getOperand(0).getReg();
-  Register SrcReg = MI.getOperand(1).getReg();
 
-  if(isRIReg(SrcReg) && DstReg.isVirtual()) {
-    MF.getRegInfo().constrainRegClass(DstReg, &AltairX::GPIReg32RegClass);
-    return nullptr;
+namespace {
+
+uint32_t getSpillOpcode(uint32_t spillSize, Register reg) {
+  if (AltairXRegisterInfo::isFReg(reg)) {
+    switch (spillSize) {
+    case 4:
+      return AltairX::FStoreRIs;
+    case 8:
+      return AltairX::FStoreRId;
+    default:
+      llvm_unreachable("Unspillable reg class");
+    }
+  } else {
+    switch (spillSize) {
+    case 1:
+      return AltairX::StoreRIb;
+    case 2:
+      return AltairX::StoreRIw;
+    case 4:
+      return AltairX::StoreRId;
+    case 8:
+      return AltairX::StoreRIq;
+    default:
+      llvm_unreachable("Unspillable reg class");
+    }
   }
-
-  if(isRIReg(DstReg) && SrcReg.isVirtual()) {
-    MF.getRegInfo().constrainRegClass(SrcReg, &AltairX::GPIReg32RegClass);
-    return nullptr;
-  }
-
-  return nullptr;
 }
-*/
+
+uint32_t getReloadOpcode(uint32_t spillSize, Register reg) {
+  if (AltairXRegisterInfo::isFReg(reg)) {
+    switch (spillSize) {
+    case 4:
+      return AltairX::FLoadRIs;
+    case 8:
+      return AltairX::FLoadRId;
+    default:
+      llvm_unreachable("Unspillable reg class");
+    }
+  } else {
+    switch (spillSize) {
+    case 1:
+      return AltairX::LoadRIb;
+    case 2:
+      return AltairX::LoadRIw;
+    case 4:
+      return AltairX::LoadRId;
+    case 8:
+      return AltairX::LoadRIq;
+    default:
+      llvm_unreachable("Unspillable reg class");
+    }
+  }
+
+  llvm_unreachable("Unspillable reg class");
+}
+
+} // namespace
+
 void AltairXInstrInfo::storeRegToStackSlot(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register SrcReg,
     bool KillSrc, int FrameIndex, const TargetRegisterClass *RC,
@@ -176,21 +269,8 @@ void AltairXInstrInfo::storeRegToStackSlot(
                                       MFI.getObjectSize(FrameIndex),
                                       MFI.getObjectAlign(FrameIndex));
 
-  const std::uint32_t spillSize = TRI->getSpillSize(*RC);
-  std::uint32_t opcode{};
-  if (spillSize == 1) {
-    opcode = AltairX::SPILLb;
-  } else if (spillSize == 2) {
-    opcode = AltairX::SPILLw;
-  } else if (spillSize == 4) {
-    opcode = AltairX::SPILLd;
-  } else if (spillSize == 8) {
-    opcode = AltairX::SPILLq;
-  } else {
-    llvm_unreachable("Wrong spill size");
-  }
-
-  BuildMI(MBB, MI, DebugLoc(), get(opcode))
+  const auto spillSize = TRI->getSpillSize(*RC);
+  BuildMI(MBB, MI, DebugLoc(), get(getSpillOpcode(spillSize, SrcReg)))
       .addReg(SrcReg, getKillRegState(KillSrc))
       .addFrameIndex(FrameIndex)
       .addImm(0)
@@ -210,21 +290,8 @@ void AltairXInstrInfo::loadRegFromStackSlot(
                                       MFI.getObjectSize(FrameIndex),
                                       MFI.getObjectAlign(FrameIndex));
 
-  std::uint32_t opcode{};
-  const std::uint32_t spillSize = TRI->getSpillSize(*RC);
-  if (spillSize == 1) {
-    opcode = AltairX::RELOADb;
-  } else if (spillSize == 2) {
-    opcode = AltairX::RELOADw;
-  } else if (spillSize == 4) {
-    opcode = AltairX::RELOADd;
-  } else if (spillSize == 8) {
-    opcode = AltairX::RELOADq;
-  } else {
-    llvm_unreachable("Wrong spill size");
-  }
-
-  BuildMI(MBB, MI, DebugLoc(), get(opcode))
+  const auto spillSize = TRI->getSpillSize(*RC);
+  BuildMI(MBB, MI, DebugLoc(), get(getSpillOpcode(spillSize, DestReg)))
       .addReg(DestReg, getDefRegState(true))
       .addFrameIndex(FrameIndex)
       .addImm(0)
@@ -272,6 +339,15 @@ bool AltairXInstrInfo::expandPostRAPseudo(MachineInstr &inst) const {
     [[fallthrough]];
   case AltairX::ConstantToRegq:
     expandPostRAConstantToReg(inst);
+    break;
+  case AltairX::BitcastIqToFd:
+    [[fallthrough]];
+  case AltairX::BitcastIdToFs:
+    [[fallthrough]];
+  case AltairX::BitcastFdToIq:
+    [[fallthrough]];
+  case AltairX::BitcastFsToId:
+    expandPostRABitcast(inst);
     break;
   default:
     return false;
@@ -370,6 +446,126 @@ void AltairXInstrInfo::expandPostRAConstantToReg(MachineInstr &inst) const {
           .addReg(dest)
           .addImm(lowvalue);
     }
+  }
+}
+
+namespace {
+
+// Return true if instruction is known to do nothing
+// Most no-op instructions are dropper before machine instruction
+// creation. This function only lists the one that won't be.
+static bool isNoop(const MachineInstr& inst)
+{
+  return inst.getOpcode() == AltairX::KILL ||
+    inst.getOpcode() == AltairX::EXTRACT_SUBREG ||
+    inst.getOpcode() == AltairX::SUBREG_TO_REG;
+}
+
+}
+
+void AltairXInstrInfo::makeBitcastToFloat(MachineInstr &inst, uint32_t add,
+                                          uint32_t fmove) const {
+  MachineBasicBlock &block = *inst.getParent();
+  DebugLoc dl{inst.getDebugLoc()};
+  const llvm::TargetRegisterInfo *regInfo = this->Subtarget.getRegisterInfo();
+
+  const Register destReg = inst.getOperand(0).getReg();
+  const Register srcReg = inst.getOperand(1).getReg();
+
+  // If previous instruction defines the source register, a copy of the value
+  // will be in the accumulator, so no additional operation is required.
+  auto it = inst.getIterator();
+  if (it != block.getFirstNonDebugInstr()) {
+    const auto previous = std::prev(it);
+    if (!previous->definesRegister(srcReg, regInfo)) {
+      BuildMI(block, inst, dl, get(add), AltairX::R56)
+        .addReg(srcReg).addImm(0);
+    }
+  } else {
+    BuildMI(block, inst, dl, get(add), AltairX::R56).addReg(srcReg).addImm(0);
+  }
+
+  // If next instruction kills the destination register
+  // use the bypass directly
+  if (it != block.getLastNonDebugInstr()) {
+    const auto next = std::next(it);
+    if (!isNoop(*next) && next->killsRegister(destReg, regInfo)) {
+      for (auto &op :
+           make_range(next->operands_begin() + 1, next->operands_end())) {
+        if (op.isReg() && op.getReg() == destReg) {
+          op.setReg(AltairX::R57);
+        }
+      }
+
+      return;
+    }
+  }
+
+  // Else use an add to move the acc to a register
+  BuildMI(block, inst, dl, get(fmove), destReg)
+      .addReg(AltairX::R57, getKillRegState(true));
+}
+
+void AltairXInstrInfo::makeBitcastToInt(MachineInstr &inst, uint32_t add,
+                                        uint32_t fmove) const {
+  MachineBasicBlock &block = *inst.getParent();
+  DebugLoc dl{inst.getDebugLoc()};
+  const llvm::TargetRegisterInfo *regInfo = this->Subtarget.getRegisterInfo();
+
+  const Register destReg = inst.getOperand(0).getReg();
+  const Register srcReg = inst.getOperand(1).getReg();
+
+  // If previous instruction defines the source register, a copy of the value
+  // will be in the accumulator, so no additional operation is required.
+  const auto it = inst.getIterator();
+  if (it->getOpcode() != AltairX::KILL && it != block.getFirstNonDebugInstr()) {
+    const auto previous = std::prev(it);
+    if (!previous->definesRegister(srcReg, regInfo)) {
+      BuildMI(block, inst, dl, get(fmove), AltairX::R56).addReg(srcReg);
+    }
+  } else {
+    BuildMI(block, inst, dl, get(fmove), AltairX::R56).addReg(srcReg);
+  }
+
+  // If next instruction kills the destination register
+  // use the bypass directly
+  if (it != block.getLastNonDebugInstr()) {
+    const auto next = std::next(it);
+    if (!isNoop(*next) && next->killsRegister(destReg, regInfo)) {
+      for (auto &op :
+           make_range(next->operands_begin() + 1, next->operands_end())) {
+        if (op.isReg() && op.getReg() == destReg) {
+          op.setReg(AltairX::R59);
+        }
+      }
+
+      return;
+    }
+  }
+
+  // Else use an add to move the acc to a register
+  BuildMI(block, inst, dl, get(add), destReg)
+      .addReg(AltairX::R59, getKillRegState(true))
+      .addImm(0);
+}
+
+void AltairXInstrInfo::expandPostRABitcast(MachineInstr &inst) const {
+  switch(inst.getOpcode())
+  {
+  case AltairX::BitcastIdToFs:
+    makeBitcastToFloat(inst, AltairX::AddRId, AltairX::FMoveRs);
+    break;
+  case AltairX::BitcastIqToFd:
+    makeBitcastToFloat(inst, AltairX::AddRIq, AltairX::FMoveRd);
+    break;
+  case AltairX::BitcastFsToId:
+    makeBitcastToInt(inst, AltairX::AddRId, AltairX::FMoveRs);
+    break;
+  case AltairX::BitcastFdToIq:
+    makeBitcastToInt(inst, AltairX::AddRIq, AltairX::FMoveRd);
+    break;
+  default:
+    llvm_unreachable("Unknown bitcast");
   }
 }
 

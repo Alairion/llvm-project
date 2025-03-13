@@ -10,7 +10,7 @@
 def : InstAlias<"move.q $dst, $src", (AddRIq GPIReg64:$dst, GPIReg64:$src, 0)>;
 def : InstAlias<"move.d $dst, $src", (AddRId GPIReg32:$dst, GPIReg32:$src, 0)>;
 def : InstAlias<"move.w $dst, $src", (AddRIw GPIReg16:$dst, GPIReg16:$src, 0)>;
-def : InstAlias<"move.b $dst, $src", (AddRIb GPIReg8:$dst, GPIReg8:$src, 0)>;
+def : InstAlias<"move.b $dst, $src", (AddRIb GPIReg8:$dst,  GPIReg8:$src,  0)>;
 
 // BRU aliases
 def : InstAlias<"ret", (IndirectCallLink ZERO, R31)>;
