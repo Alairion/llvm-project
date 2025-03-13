@@ -15,18 +15,17 @@ class InstFormat<bits<64> val> {
 }
 def InstFormatPseudo : InstFormat<0>;
 def InstFormatMoveImm18 : InstFormat<1>;
-def InstFormatRegReg : InstFormat<2>;
-def InstFormatRegRegShift : InstFormat<3>;
+def InstFormatRegReg : InstFormat<2>; // two inputs, single output (ALU, LSU, MDU, FPU, EFU)
+def InstFormatUnary : InstFormat<3>; // single input, single output (FPU)
 def InstFormatALURegImm9 : InstFormat<4>;
 def InstFormatLSURegImm10 : InstFormat<5>;
-def InstFormatLSURegImm16 : InstFormat<6>;
-def InstFormatFPURegImm16 : InstFormat<7>;
-def InstFormatBRURelImm23 : InstFormat<8>;
-def InstFormatBRURelImm24 : InstFormat<9>;
-def InstFormatBRUAbsImm24 : InstFormat<10>;
-def InstFormatBRUIndirect : InstFormat<11>;
-def InstFormatCMPRegReg : InstFormat<12>; // cmp has a specific format
-def InstFormatCMPRegImm9 : InstFormat<13>;
+def InstFormatFPURegImm16 : InstFormat<6>;
+def InstFormatBRURelImm23 : InstFormat<7>;
+def InstFormatBRURelImm24 : InstFormat<8>;
+def InstFormatBRUAbsImm24 : InstFormat<9>;
+def InstFormatBRUIndirect : InstFormat<10>;
+def InstFormatCMPRegReg : InstFormat<11>; // cmp has a specific format
+def InstFormatCMPRegImm9 : InstFormat<12>;
 
 //===----------------------------------------------------------------------===//
 // Opcodes
@@ -133,13 +132,13 @@ class AltairXOpcodeBRU<bits<4> val>
   let Value{1-4} = val;
 }
 
-def OPCODE_BRA : AltairXOpcodeBRU<0b0001>;
+def OPCODE_BRA   : AltairXOpcodeBRU<0b0001>;
 def OPCODE_CALLR : AltairXOpcodeBRU<0b1001>;
-def OPCODE_JUMP : AltairXOpcodeBRU<0b0101>;
-def OPCODE_CALL : AltairXOpcodeBRU<0b1101>;
+def OPCODE_JUMP  : AltairXOpcodeBRU<0b0101>;
+def OPCODE_CALL  : AltairXOpcodeBRU<0b1101>;
 
 def OPCODE_INDIRECT_CALLR : AltairXOpcodeBRU<0b1011>;
-def OPCODE_INDIRECT_CALL : AltairXOpcodeBRU<0b1111>;
+def OPCODE_INDIRECT_CALL  : AltairXOpcodeBRU<0b1111>;
 
 class AltairXOpcodeFPU<bits<4> val>
   : AltairXOpcode {
@@ -147,11 +146,32 @@ class AltairXOpcodeFPU<bits<4> val>
   let Value{5-7} = 0b110;
 }
 
-class AltairXOpcodeFPUD<bits<4> val>
-  : AltairXOpcode {
-  let Value{1-4} = val;
-  let Value{5-7} = 0b001;
-}
+def OPCODE_FADD  : AltairXOpcodeFPU<0b0000>;
+def OPCODE_FSUB  : AltairXOpcodeFPU<0b1000>;
+def OPCODE_FMUL  : AltairXOpcodeFPU<0b0100>;
+def OPCODE_FNMUL : AltairXOpcodeFPU<0b1100>;
+
+def OPCODE_ITOF : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
+def OPCODE_FTOI : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
+def OPCODE_FTOD : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
+def OPCODE_DTOF : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
+def OPCODE_ITOD : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
+def OPCODE_DTOI : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
+
+def OPCODE_FNEG : AltairXOpcodeFPU<0b0001>;
+def OPCODE_FABS : AltairXOpcodeFPU<0b1001>;
+def OPCODE_FMIN : AltairXOpcodeFPU<0b0101>;
+def OPCODE_FMAX : AltairXOpcodeFPU<0b1101>;
+
+def OPCODE_FMOVE  : AltairXOpcodeFPU<0b0011>;
+def OPCODE_FCMP   : AltairXOpcodeFPU<0b1011>;
+def OPCODE_FMOVEI : AltairXOpcodeFPU<0b0111>;
+def OPCODE_FCMPI  : AltairXOpcodeFPU<0b1111>;
+
+def OPCODE_FCMOVE : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
+def OPCODE_FSE    : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
+def OPCODE_FSEN   : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
+def OPCODE_FSLT   : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
 
 class AltairXOpcodeEFU<bits<4> val>
   : AltairXOpcode {
@@ -159,15 +179,26 @@ class AltairXOpcodeEFU<bits<4> val>
   let Value{5-7} = 0b101;
 }
 
-def OPCODE_GETIR : AltairXOpcodeEFU<0b0000>; // R <- IR
-def OPCODE_SETFR : AltairXOpcodeEFU<0b1000>; // FR <- R
+def OPCODE_FDIV  : AltairXOpcodeEFU<0b0000>;
+
+def OPCODE_SETEF : AltairXOpcodeEFU<0b0111>;
+def OPCODE_GETEF : AltairXOpcodeEFU<0b1111>;
+
+class AltairXOpcodeCU<bits<4> val>
+  : AltairXOpcode {
+  let Value{1-4} = val;
+  let Value{5-7} = 0b101;
+}
+
+def OPCODE_GETIR : AltairXOpcodeCU<0b0000>; // R <- IR
+def OPCODE_SETFR : AltairXOpcodeCU<0b1000>; // FR <- R
 
 //===----------------------------------------------------------------------===//
 // Instruction formats
 //===----------------------------------------------------------------------===//
 class AltairXInst<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr, InstFormat format>
   : Instruction {
-  field bits<32> Inst;
+  field bits<32> Inst = 0;
   // SoftFail is a field the disassembler can use to provide a way for
   // instructions to not match without killing the whole decode process. It is
   // mainly used for ARM, but Tablegen expects this field to exist or it fails
@@ -214,8 +245,7 @@ class AltairXInstALURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Inst{31-26} = rd;
   let Inst{25-20} = rs1;
   let Inst{19-14} = rs2;
-  let Inst{11-13} = 0; // left-shift (imm3) 
-  let Inst{10} = 0;
+  let Inst{11-13} = 0; // left-shift (imm3)
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
 }
@@ -243,7 +273,6 @@ class AltairXInstSExt<AltairXOpcode opcode, bits<2> size, bits<2> insize, dag ou
   let Inst{25-20} = rs1;
   let Inst{19-14} = 0b111111; // zero
   let Inst{13-12} = insize;
-  let Inst{10} = 0;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
 }
@@ -298,7 +327,6 @@ class AltairXInstMDURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Inst{31-26} = 0b111111; // zero, MDU outputs in special registers
   let Inst{25-20} = rs1;
   let Inst{19-14} = rs2;
-  let Inst{10} = 0;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
 }
@@ -325,7 +353,6 @@ class AltairXInstMDUGetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pat
   let Inst{25-20} = 0b111111; // zero
   let Inst{19-14} = 0b111111; // zero
   let Inst{12-11} = pq{0-1};
-  let Inst{10} = 0;
   let Opcode = opcode.Value;
 }
 
@@ -338,7 +365,6 @@ class AltairXInstMDUSetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pat
   let Inst{25-20} = rs1;
   let Inst{19-14} = 0b111111; // zero
   let Inst{12-11} = pq{0-1};
-  let Inst{10} = 0;
   let Opcode = opcode.Value;
 }
 
@@ -354,7 +380,6 @@ class AltairXInstLSURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
   let Inst{25-20} = base;
   let Inst{19-14} = offset;
   let Inst{13-11} = shift;
-  let Inst{10} = 0;
   let Inst{9-8} = size;
   let Opcode = opcode.Value;
 }
@@ -382,8 +407,7 @@ class AltairXInstBRC<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern,
   let Inst{31-9} = target;
   let Inst{8} = pred;
   let Opcode{7-5} = opcode.Value{7-5};
-  let Opcode{4} = 0;
-  let Opcode{3-1} = cond;
+  let Opcode{3-1} = cond; // real opcode is dynamically determined based on predicate!
   
   let isBranch = 1;
 }
@@ -424,8 +448,63 @@ class AltairXInstIndirectBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> 
   let isIndirectBranch = 1;
 }
 
+// FPU
+class AltairXInstFPURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rd;
+  bits<6> rs1;
+  bits<6> rs2;
+
+  let Inst{31-26} = rd;
+  let Inst{25-20} = rs1;
+  let Inst{19-14} = rs2;
+  let Inst{9-8} = size; // 0 = f16, 1 = f32, 2 = f64, 3 = 128
+  let Opcode = opcode.Value;
+}
+
+class AltairXInstFPUUnary<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rd;
+  bits<6> rs1;
+
+  let Inst{31-26} = rd;
+  let Inst{25-20} = rs1;
+  let Inst{19-14} = 0b111111; // zero
+  let Inst{9-8} = size;
+  let Opcode = opcode.Value;
+}
+
+class AltairXInstFCMPRR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInstCMPRR<opcode, size, outs, ins, pattern, opcodestr, argstr> {
+}
+
+// EFU
+class AltairXInstEFURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInstMDURR<opcode, size, outs, ins, pattern, opcodestr, argstr> {
+}
+
+class AltairXInstEFUGetEF<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rd;
+
+  let Inst{31-26} = rd;
+  let Inst{25-20} = 0b111111; // zero
+  let Inst{19-14} = 0b111111; // zero
+  let Opcode = opcode.Value;
+}
+
+class AltairXInstEFUSetEF<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
+  bits<6> rs1;
+
+  let Inst{31-26} = 0b111111; // zero
+  let Inst{25-20} = rs1;
+  let Inst{19-14} = 0b111111; // zero
+  let Opcode = opcode.Value;
+}
+
 // CU
-class AltairXInstCUSetFR<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+class AltairXInstCUSetFR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rs1;
   bits<6> ri;
@@ -433,10 +512,10 @@ class AltairXInstCUSetFR<dag outs, dag ins, list<dag> pattern, string opcodestr,
   let Inst{31-26} = 0b111111; // zero
   let Inst{25-20} = rs1;
   let Inst{19-14} = 0b111111; // zero
-  let Opcode = OPCODE_SETFR.Value;
+  let Opcode = opcode.Value;
 }
 
-class AltairXInstCUGetIR<dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+class AltairXInstCUGetIR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rd;
   bits<6> ir;
@@ -445,5 +524,5 @@ class AltairXInstCUGetIR<dag outs, dag ins, list<dag> pattern, string opcodestr,
   let Inst{25-20} = 0b111111; // zero
   let Inst{19-14} = 0b111111; // zero
   let Inst{13-11} = ir{0-2};
-  let Opcode = OPCODE_GETIR.Value;
+  let Opcode = opcode.Value;
 }

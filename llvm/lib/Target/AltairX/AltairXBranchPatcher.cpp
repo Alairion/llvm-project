@@ -87,8 +87,7 @@ namespace {
 
 template <typename It> // It::value_type compatible with const machineInstr&
 auto findNearestCmp(It begin, It end) {
-  return std::find_if(
-      begin, end, [](auto &inst) { return AltairXInstrInfo::isCompare(inst); });
+  return std::find_if(begin, end, AltairXInstrInfo::isAnyCmp);
 }
 
 struct BRCOperands {
@@ -151,7 +150,11 @@ void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &block,
     cmpInst = newCmp;
   }
 
-  runOnCMP(block, *cmpInst);
+  if (AltairXInstrInfo::isFCmp(*cmpInst)) {
+    runOnFCmp(block, *cmpInst);
+  } else {
+    runOnCmp(block, *cmpInst);
+  }
 
   auto *target = inst.getOperand(0).getMBB();
   const auto probability = branchInfo->getEdgeProbability(&block, target);
@@ -186,7 +189,7 @@ uint32_t getCmpImmVersion(uint32_t opcode) {
 
 } // namespace
 
-void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &block,
+void AltairXBranchPatcher::runOnCmp(MachineBasicBlock &block,
                                     MachineInstr &inst) {
   const auto reg = inst.getOperand(1).getReg();
   const auto killing = inst.getOperand(1).isKill();
@@ -226,6 +229,12 @@ void AltairXBranchPatcher::runOnCMP(MachineBasicBlock &block,
   }
 
   inst.eraseFromParent();
+}
+
+
+void AltairXBranchPatcher::runOnFCmp(MachineBasicBlock &block,
+                                     MachineInstr &inst) {
+  // TODO: magic with fmovei and fcmpi, currently unsupported!
 }
 
 } // namespace llvm

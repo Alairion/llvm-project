@@ -51,8 +51,16 @@ public:
   Register getZeroRegister() const;
   Register getFrameRegister(const MachineFunction &MF) const override;
 
-  static const TargetRegisterClass *intRegClass(unsigned Size);
-  static const TargetRegisterClass *MVTRegClass(MVT Type);
+  static const TargetRegisterClass *intRegClass(unsigned size);
+  static const TargetRegisterClass *floatRegClass(unsigned size);
+  static const TargetRegisterClass *MVTRegClass(MVT type);
+
+  static bool isGPIReg(Register reg);
+  static bool isFReg(Register reg);
+  static bool isVIReg(Register reg);
+  static bool isMDUReg(Register reg);
+  static bool isRIReg(Register reg);
+  static bool isEFReg(Register reg);
 
 protected:
   const AltairXSubtarget &Subtarget;

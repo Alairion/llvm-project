@@ -33,10 +33,14 @@ enum NodeType {
   INDIRECT_JUMP,
   INDIRECT_BRA,
   CMP,
+  FCMP,
   BRCOND,
   SBIT,
   CMOVE,
+  FCMOVE,
   GAWRAPPER,
+  ITOF,
+  FTOI,
 };
 }
 
@@ -56,14 +60,6 @@ protected:
   const AltairXSubtarget &Subtarget;
 
 private:
-  EVT getSetCCResultType(const DataLayout &, LLVMContext &,
-                         EVT VT) const override;
-
-  using RegsToPassVector = SmallVector<std::pair<unsigned int, SDValue>, 8>;
-
-  SDValue getGlobalAddressWrapper(SDValue GA, const GlobalValue *GV,
-                                  SelectionDAG &DAG) const;
-
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool IsVarArg,
                                const SmallVectorImpl<ISD::InputArg> &Ins,
@@ -86,16 +82,33 @@ private:
   void HandleByVal(CCState *State, unsigned int &Size,
                    Align Align) const override;
 
+  EVT getSetCCResultType(const DataLayout &, LLVMContext &,
+                         EVT VT) const override;
+
+  // Float handling:
+  SDValue LowerFP_TO_SINT(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerFP_TO_UINT(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerSINT_TO_FP(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerUINT_TO_FP(SDValue Op, SelectionDAG& DAG) const;
+
+  // Address mode related:
+  template <typename NodeT>
+  SDValue getGlobalAddressWrapper(SelectionDAG &DAG, const NodeT *node) const;
+
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerReturnAddr(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerJumpTable(SDValue Op, SelectionDAG& DAG) const;
+
+  // Conditions and branches
   SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerSELECT(SDValue Op, SelectionDAG& DAG) const;
   SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBRIND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
+
+  // Others
   SDValue LowerVASTART(SDValue Op, SelectionDAG& DAG) const;
 };
 } // namespace llvm
