@@ -970,8 +970,11 @@ void MatcherGen::EmitResultInstructionAsOperand(
       NodeHasChain = true;
   }
 
-  assert((!ResultVTs.empty() || TreeHasOutGlue || NodeHasChain) &&
-         "Node has no result");
+  if(!(!ResultVTs.empty() || TreeHasOutGlue || NodeHasChain))
+  {
+    II.TheDef->dump();
+    llvm_unreachable("Node has no result");
+  }
 
   AddMatcher(new EmitNodeMatcher(II, ResultVTs, InstOps, NodeHasChain,
                                  TreeHasInGlue, TreeHasOutGlue, NodeHasMemRefs,

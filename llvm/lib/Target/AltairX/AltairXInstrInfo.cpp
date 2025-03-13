@@ -291,8 +291,8 @@ void AltairXInstrInfo::loadRegFromStackSlot(
                                       MFI.getObjectAlign(FrameIndex));
 
   const auto spillSize = TRI->getSpillSize(*RC);
-  BuildMI(MBB, MI, DebugLoc(), get(getSpillOpcode(spillSize, DestReg)))
-      .addReg(DestReg, getDefRegState(true))
+  BuildMI(MBB, MI, DebugLoc(), get(getReloadOpcode(spillSize, DestReg)),
+          DestReg)
       .addFrameIndex(FrameIndex)
       .addImm(0)
       .addMemOperand(MMO);
