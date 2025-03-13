@@ -305,11 +305,11 @@ def MOVEIX18 : AltairXInstMoveIX<InstFormatMoveImm18, (outs), (ins moveiximm:$im
 // ALU basics operations
 //===----------------------------------------------------------------------===//
 
-class ALUInstRR<string name, bits<2> size, AltairXOpcode opcode, SDNode opnode, RegisterClass regclass>
+class ALUInstRR<string name, bits<2> size, AltairXOpcode opcode, SDNode opnode, RegisterClass regclass, RegisterClass rightclass = regclass>
   : AltairXInstALURR<opcode, size,
     (outs regclass:$rd),
-    (ins regclass:$rs1, regclass:$rs2),
-    [(set regclass:$rd, (opnode regclass:$rs1, regclass:$rs2))],
+    (ins regclass:$rs1, rightclass:$rs2),
+    [(set regclass:$rd, (opnode regclass:$rs1, rightclass:$rs2))],
     name, "$rd, $rs1, $rs2"> {
 }
 
@@ -337,21 +337,21 @@ let isAdd = 1, isReMaterializable = 1 in
 defm Add : ALUInst<"add", OPCODE_ADD, add>;
 defm Sub : ALUInst<"sub", OPCODE_SUB, sub>;
 defm Xor : ALUInst<"xor", OPCODE_XOR, xor>;
-defm Or  : ALUInst<"or", OPCODE_OR, or>;
+defm Or  : ALUInst<"or",  OPCODE_OR,  or>;
 defm And : ALUInst<"and", OPCODE_AND, and>;
 
 def shiftAmount : Operand<i64> {
   let EncoderMethod = "getImmOpValue";
 }
 
-// Shifts always use 64-bits immediates
+// Shifts always use 64-bits right operands
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 multiclass ALUInstShift<string name, AltairXOpcode opcode, SDNode opnode> {
-  def RRb : ALUInstRR<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8>;
-  def RRw : ALUInstRR<!strconcat(name, ".w"), 1, opcode, opnode, GPIReg16>;
-  def RRd : ALUInstRR<!strconcat(name, ".d"), 2, opcode, opnode, GPIReg32>;
-  def RRq : ALUInstRR<!strconcat(name, ".q"), 3, opcode, opnode, GPIReg64>;
-  def RIb : ALUInstRI<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8, shiftAmount, s64imm32>;
+  def RRb : ALUInstRR<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8,  GPIReg64>;
+  def RRw : ALUInstRR<!strconcat(name, ".w"), 1, opcode, opnode, GPIReg16, GPIReg64>;
+  def RRd : ALUInstRR<!strconcat(name, ".d"), 2, opcode, opnode, GPIReg32, GPIReg64>;
+  def RRq : ALUInstRR<!strconcat(name, ".q"), 3, opcode, opnode, GPIReg64, GPIReg64>;
+  def RIb : ALUInstRI<!strconcat(name, ".b"), 0, opcode, opnode, GPIReg8,  shiftAmount, s64imm32>;
   def RIw : ALUInstRI<!strconcat(name, ".w"), 1, opcode, opnode, GPIReg16, shiftAmount, s64imm32>;
   def RId : ALUInstRI<!strconcat(name, ".d"), 2, opcode, opnode, GPIReg32, shiftAmount, s64imm32>;
   def RIq : ALUInstRI<!strconcat(name, ".q"), 3, opcode, opnode, GPIReg64, shiftAmount, s64imm32>;
@@ -360,6 +360,8 @@ multiclass ALUInstShift<string name, AltairXOpcode opcode, SDNode opnode> {
 defm Lsl : ALUInstShift<"lsl", OPCODE_LSL, shl>;
 defm Asr : ALUInstShift<"asr", OPCODE_ASR, sra>;
 defm Lsr : ALUInstShift<"lsr", OPCODE_LSR, srl>;
+defm RtL : ALUInstShift<"rtl", OPCODE_RTL, rotl>;
+defm RtR : ALUInstShift<"rtr", OPCODE_RTR, rotr>;
 
 //===----------------------------------------------------------------------===//
 // MDU (mul, div, rem)
@@ -919,7 +921,7 @@ def AltairXcmove : SDNode<"AltairXISD::CMOVE", SDT_AltairXcmove, []>;
 // CMOVE, first parameter is also the output
 let Constraints = "$out = $rd" in
 class CMoveRRInst<bits<2> size, string sizename, RegisterClass regclass>
-  : AltairXInstALURR<OPCODE_CMOVE, size,
+  : AltairXInstALURRR<OPCODE_CMOVE, size,
     (outs regclass:$out),
     (ins regclass:$rd, GPIReg8:$rs1, regclass:$rs2),
     [(set regclass:$out, (AltairXcmove regclass:$rd, GPIReg8:$rs1, regclass:$rs2))],
@@ -928,7 +930,7 @@ class CMoveRRInst<bits<2> size, string sizename, RegisterClass regclass>
 
 let Constraints = "$out = $rd" in
 class CMoveRIInst<bits<2> size, string sizename, RegisterClass regclass, Operand immop, ImmLeaf immpat>
-  : AltairXInstALURI<OPCODE_CMOVE, size,
+  : AltairXInstALURRI<OPCODE_CMOVE, size,
     (outs regclass:$out),
     (ins regclass:$rd, GPIReg8:$rs1, immop:$imm),
     [(set regclass:$out, (AltairXcmove regclass:$rd, GPIReg8:$rs1, immpat:$imm))],

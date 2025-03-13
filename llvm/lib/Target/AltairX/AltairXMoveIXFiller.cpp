@@ -57,6 +57,8 @@ bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
     return llvm::isInt<18>(imm);
   case AltairX::InstFormatALURegImm9:
     return llvm::isInt<9>(imm);
+  case AltairX::InstFormatALURegRegImm9:
+    return llvm::isInt<9>(imm);
   case AltairX::InstFormatLSURegImm10:
     return llvm::isInt<10>(imm);
   case AltairX::InstFormatFPURegImm16:
@@ -82,6 +84,8 @@ std::uint32_t immOperandIndex(const MachineInstr &inst) {
     return 1;
   case AltairX::InstFormatALURegImm9:
     return 2;
+  case AltairX::InstFormatALURegRegImm9:
+    return 3;
   case AltairX::InstFormatLSURegImm10:
     return 2;
   case AltairX::InstFormatFPURegImm16:
@@ -104,6 +108,8 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
   case AltairX::InstFormatMoveImm18:
     return AltairX::MOVEIX18;
   case AltairX::InstFormatALURegImm9:
+    return AltairX::MOVEIX9;
+  case AltairX::InstFormatALURegRegImm9:
     return AltairX::MOVEIX9;
   case AltairX::InstFormatLSURegImm10:
     return AltairX::MOVEIX10;
@@ -154,6 +160,8 @@ void AltairXMoveIXFiller::runOnMachineBasicBlock(MachineBasicBlock &block) {
       }
     } else if (op.isMBB()) {
       moveix = makeBuilder().addMBB(op.getMBB()).getInstr();
+    } else if (op.isSymbol()) {
+      moveix = makeBuilder().addExternalSymbol(op.getSymbolName()).getInstr();
     } else {
       LLVM_DEBUG(it->dump());
       llvm_unreachable("Unsupported immediate type!");
