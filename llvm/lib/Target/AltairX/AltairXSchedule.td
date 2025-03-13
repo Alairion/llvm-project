@@ -31,7 +31,7 @@ def BRU  : FuncUnit;
 def CU   : FuncUnit;
 def VU   : FuncUnit;
 
-def ACC : Bypass;
+def ACC : Bypass; // Is bypass this or something else ??
 def BA1 : Bypass;
 def BA2 : Bypass;
 def BF1 : Bypass;

@@ -42,6 +42,12 @@ static constexpr std::array<llvm::MVT, 3> SmallIntsMVT = {MVT::i8, MVT::i16,
                                                           MVT::i32};
 static constexpr std::array<llvm::MVT, 4> AllIntsMVT = {MVT::i8, MVT::i16,
                                                         MVT::i32, MVT::i64};
+static constexpr std::array<llvm::MVT, 4> AllFloatsMVT = {MVT::f16, MVT::f32,
+                                                          MVT::f64, MVT::f128};
+
+static constexpr std::array<llvm::MVT, 8> AllMVT = {
+    MVT::i8,  MVT::i16, MVT::i32, MVT::i64,
+    MVT::f16, MVT::f32, MVT::f64, MVT::f128};
 
 static constexpr std::array<MCPhysReg, 8> GPRArgRegs = {
     AltairX::R1, AltairX::R2, AltairX::R3, AltairX::R4,
@@ -56,6 +62,8 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   addRegisterClass(MVT::i16, &AltairX::GPIReg16RegClass);
   addRegisterClass(MVT::i32, &AltairX::GPIReg32RegClass);
   addRegisterClass(MVT::i64, &AltairX::GPIReg64RegClass);
+  addRegisterClass(MVT::f32, &AltairX::FReg32RegClass);
+  addRegisterClass(MVT::f64, &AltairX::FReg64RegClass);
 
   // Must, computeRegisterProperties - Once all of the register classes are
   // added, this allows us to compute derived properties we expose.
@@ -68,27 +76,39 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
 
+  setOperationAction(ISD::FNEG, AllFloatsMVT, LegalizeAction::Expand);
+
+  setOperationAction(ISD::FP_TO_SINT, SmallIntsMVT, LegalizeAction::Promote);
+  setOperationAction(ISD::SINT_TO_FP, SmallIntsMVT, LegalizeAction::Promote);
+  setOperationAction(ISD::FP_TO_UINT, SmallIntsMVT, LegalizeAction::Promote);
+  setOperationAction(ISD::UINT_TO_FP, SmallIntsMVT, LegalizeAction::Promote);
+  setOperationAction(ISD::FP_TO_SINT, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::SINT_TO_FP, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::FP_TO_UINT, MVT::i64, LegalizeAction::Expand);
+  setOperationAction(ISD::UINT_TO_FP, MVT::i64, LegalizeAction::Expand);
+
   setOperationAction(ISD::FrameIndex, MVT::i64, LegalizeAction::Expand);
   setOperationAction(ISD::GlobalAddress, MVT::i64, LegalizeAction::Custom);
   setOperationAction(ISD::BlockAddress, MVT::i64, LegalizeAction::Custom);
-  setOperationAction(ISD::ConstantPool, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::ConstantPool, AllMVT, LegalizeAction::Custom);
   setOperationAction(ISD::Constant, AllIntsMVT, LegalizeAction::Legal);
+  setOperationAction(ISD::ConstantFP, AllFloatsMVT, LegalizeAction::Expand);
 
   setOperationAction(ISD::DYNAMIC_STACKALLOC, AllIntsMVT, Expand);
   setOperationAction({ISD::STACKSAVE, ISD::STACKRESTORE}, MVT::Other, Expand);
 
-  setOperationAction(ISD::BR_CC, AllIntsMVT, LegalizeAction::Custom);
+  setOperationAction(ISD::BR_CC, AllMVT, LegalizeAction::Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, LegalizeAction::Expand);
   setOperationAction(ISD::JumpTable, MVT::i64, LegalizeAction::Custom);
   setOperationAction(ISD::BRCOND, MVT::Other, LegalizeAction::Custom);
   setOperationAction(ISD::BRIND, MVT::Other, LegalizeAction::Custom);
-  setOperationAction(ISD::SETCC, MVT::i1, LegalizeAction::Promote);
-  setOperationAction(ISD::SETCC, AllIntsMVT, LegalizeAction::Custom);
-  setOperationAction(ISD::SELECT_CC, AllIntsMVT, LegalizeAction::Custom);
+  setOperationAction(ISD::SETCC, AllMVT, LegalizeAction::Custom);
+  setOperationAction(ISD::SELECT, AllMVT, LegalizeAction::Custom);
+  setOperationAction(ISD::SELECT_CC, AllMVT, LegalizeAction::Custom);
 
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
-  setOperationAction(ISD::VAARG, SmallIntsMVT, Promote);
+  //setOperationAction(ISD::VAARG, AllMVT, Promote);
   setOperationAction(ISD::VAARG, MVT::Other, Expand);
   setOperationAction(ISD::VACOPY, MVT::Other, Expand);
 
@@ -104,14 +124,24 @@ SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
   LLVM_DEBUG(Op.dump());
 
   switch (Op.getOpcode()) {
+  case ISD::FP_TO_SINT:
+    return LowerFP_TO_SINT(Op, DAG);
+  case ISD::FP_TO_UINT:
+    return LowerFP_TO_UINT(Op, DAG);
+  case ISD::SINT_TO_FP:
+    return LowerSINT_TO_FP(Op, DAG);
+  case ISD::UINT_TO_FP:
+    return LowerUINT_TO_FP(Op, DAG);
   case ISD::GlobalAddress:
     return LowerGlobalAddress(Op, DAG);
   case ISD::ConstantPool:
     return LowerConstantPool(Op, DAG);
   case ISD::BlockAddress:
     return LowerBlockAddress(Op, DAG);
-  case ISD::RETURNADDR:
-    return LowerReturnAddr(Op, DAG);
+  case ISD::JumpTable:
+    return LowerJumpTable(Op, DAG);
+  case ISD::SELECT:
+    return LowerSELECT(Op, DAG);
   case ISD::SELECT_CC:
     return LowerSELECT_CC(Op, DAG);
   case ISD::SETCC:
@@ -122,8 +152,6 @@ SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
     return LowerBR_CC(Op, DAG);
   case ISD::BRIND:
     return LowerBRIND(Op, DAG);
-  case ISD::JumpTable:
-    return LowerJumpTable(Op, DAG);
   case ISD::VASTART:
     return LowerVASTART(Op, DAG);
   default:
@@ -149,6 +177,8 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AltairXISD::IndirectBRA";
   case AltairXISD::CMP:
     return "AltairXISD::Cmp";
+  case AltairXISD::FCMP:
+    return "AltairXISD::FCmp";
   case AltairXISD::BRCOND:
     return "AltairXISD::BRCond";
   case AltairXISD::SBIT:
@@ -162,9 +192,8 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
   }
 }
 
-namespace
-{
-    
+namespace {
+
 SDValue toValVT(SelectionDAG &DAG, SDValue Value, const CCValAssign &VA,
                 const SDLoc &DL) {
   switch (VA.getLocInfo()) {
@@ -205,7 +234,7 @@ SDValue lowerFromMemLoc(SelectionDAG &DAG, SDValue Chain, const CCValAssign &VA,
   default:
     llvm_unreachable("Unexpected CCValAssign::LocInfo");
   case CCValAssign::Full:
-  //case CCValAssign::Indirect:
+  // case CCValAssign::Indirect:
   case CCValAssign::BCvt:
     break;
   }
@@ -214,14 +243,15 @@ SDValue lowerFromMemLoc(SelectionDAG &DAG, SDValue Chain, const CCValAssign &VA,
   MachineFrameInfo &MFI = MF.getFrameInfo();
   EVT type = VA.getValVT();
 
-  int index = MFI.CreateFixedObject(type.getStoreSize(), VA.getLocMemOffset(), true);
+  int index =
+      MFI.CreateFixedObject(type.getStoreSize(), VA.getLocMemOffset(), true);
   SDValue frameIndex = DAG.getFrameIndex(index, MVT::i64);
 
   return DAG.getExtLoad(ISD::NON_EXTLOAD, DL, VA.getLocVT(), Chain, frameIndex,
                         MachinePointerInfo::getFixedStack(MF, index), type);
 }
 
-}
+} // namespace
 
 /// LowerFormalArguments - transform physical registers into virtual registers
 /// and generate load operations for arguments places on the stack.
@@ -259,7 +289,7 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
       vaargsOffset = -vaargsSaveSize;
     }
 
-    MachineFrameInfo& MFI = MF.getFrameInfo();
+    MachineFrameInfo &MFI = MF.getFrameInfo();
 
     // Record the frame index of the first variable argument
     // which is a value necessary to VASTART.
@@ -269,8 +299,8 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
 
     // Copy the integer registers that may have been used for passing varargs
     // to the vararg save area.
-    const auto* regClass = &AltairX::GPIReg64RegClass;
-    MachineRegisterInfo& regInfo = MF.getRegInfo();
+    const auto *regClass = &AltairX::GPIReg64RegClass;
+    MachineRegisterInfo &regInfo = MF.getRegInfo();
     for (unsigned i = firstReg; i < GPRArgRegs.size(); ++i) {
       const Register reg = regInfo.createVirtualRegister(regClass);
       regInfo.addLiveIn(GPRArgRegs[i], reg);
@@ -295,16 +325,15 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
       InVals.push_back(lowerFromRegLoc(DAG, Chain, VA, DL));
     } else {
       assert(VA.isMemLoc());
-      // assert(VA.getValVT() != MVT::i64 && "i64 should already be lowered");
       InVals.push_back(lowerFromMemLoc(DAG, Chain, VA, DL));
     }
-  }  
-  
+  }
+
   // All stores are grouped in one node to allow the matching between
   // the size of Ins and InVals. This only happens for vararg functions.
-  if(!outChains.empty()) {
+  if (!outChains.empty()) {
     outChains.push_back(Chain);
-      Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, outChains);
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, outChains);
   }
 
   return Chain;
@@ -382,7 +411,7 @@ AltairXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // Analyze return values to determine the number of bytes of stack required.
   SmallVector<CCValAssign, 16> retLocs;
   CCState ccInfo{CLI.CallConv, CLI.IsVarArg, DAG.getMachineFunction(), retLocs,
-                  *DAG.getContext()};
+                 *DAG.getContext()};
   ccInfo.AllocateStack(inInfo.getStackSize(), Align(8));
   ccInfo.AnalyzeCallResult(CLI.Ins, AltairX_CRetConv);
   const auto stackSize = ccInfo.getStackSize();
@@ -611,11 +640,6 @@ AltairXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   return DAG.getNode(AltairXISD::RET, DL, MVT::Other, retOps);
 }
 
-SDValue AltairXTargetLowering::getGlobalAddressWrapper(
-    SDValue GA, const GlobalValue *GV, SelectionDAG &DAG) const {
-  llvm_unreachable("Unhandled global variable");
-}
-
 EVT AltairXTargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
                                               EVT VT) const {
   if (VT.isVector()) {
@@ -625,49 +649,137 @@ EVT AltairXTargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
   return MVT::i8;
 }
 
-SDValue AltairXTargetLowering::LowerGlobalAddress(SDValue Op,
-                                                  SelectionDAG &DAG) const {
-  const GlobalAddressSDNode *global = cast<GlobalAddressSDNode>(Op);
-  const GlobalValue *value = global->getGlobal();
-  const auto type = Op.getValueType();
-
-  SDLoc dl{global};
-  SDValue addr =
-      DAG.getTargetGlobalAddress(value, dl, type, global->getOffset());
-  SDValue wrap = DAG.getNode(AltairXISD::GAWRAPPER, dl, type, addr);
-
-  return wrap;
-}
-
-SDValue AltairXTargetLowering::LowerConstantPool(SDValue Op,
-                                                 SelectionDAG &DAG) const {
-  llvm_unreachable("Unsupported constant pool");
-}
-
-SDValue AltairXTargetLowering::LowerBlockAddress(SDValue Op,
-                                                 SelectionDAG &DAG) const {
-  llvm_unreachable("Unsupported block address");
-}
-
-SDValue AltairXTargetLowering::LowerReturnAddr(SDValue Op,
+SDValue AltairXTargetLowering::LowerFP_TO_SINT(SDValue Op,
                                                SelectionDAG &DAG) const {
-  return SDValue();
+  assert(Op.getSimpleValueType() == MVT::i64);
+
+  const MVT ftype = Op.getOperand(0).getSimpleValueType();
+  assert((ftype == MVT::f32 || ftype == MVT::f64));
+
+  const SDLoc dl{Op};
+  auto ftoi = DAG.getNode(AltairXISD::FTOI, dl, MVT::f64, Op.getOperand(0));
+  return DAG.getNode(ISD::BITCAST, dl, MVT::i64, ftoi);
+}
+
+SDValue AltairXTargetLowering::LowerFP_TO_UINT(SDValue Op,
+                                               SelectionDAG &DAG) const {
+  assert(Op.getSimpleValueType() == MVT::i64);
+
+  const MVT ftype = Op.getOperand(0).getSimpleValueType();
+  assert((ftype == MVT::f32 || ftype == MVT::f64));
+
+  const SDLoc dl{Op};
+  auto ftoi = DAG.getNode(AltairXISD::FTOI, dl, MVT::f64, Op.getOperand(0));
+  return DAG.getNode(ISD::BITCAST, dl, MVT::i64, ftoi);
+}
+
+SDValue AltairXTargetLowering::LowerSINT_TO_FP(SDValue Op,
+                                               SelectionDAG &DAG) const {
+  assert(Op.getOperand(0).getSimpleValueType() == MVT::i64);
+
+  const MVT ftype = Op.getSimpleValueType();
+  assert((ftype == MVT::f32 || ftype == MVT::f64));
+
+  const SDLoc dl{Op};
+  auto bitcast = DAG.getNode(ISD::BITCAST, dl, MVT::f64, Op.getOperand(0));
+  return DAG.getNode(AltairXISD::ITOF, dl, ftype, bitcast);
+}
+
+SDValue AltairXTargetLowering::LowerUINT_TO_FP(SDValue Op,
+                                               SelectionDAG &DAG) const {
+  assert(Op.getOperand(0).getSimpleValueType() == MVT::i64);
+
+  const MVT ftype = Op.getSimpleValueType();
+  assert((ftype == MVT::f32 || ftype == MVT::f64));
+
+  const SDLoc dl{Op};
+  auto bitcast = DAG.getNode(ISD::BITCAST, dl, MVT::f64, Op.getOperand(0));
+  return DAG.getNode(AltairXISD::ITOF, dl, ftype, bitcast);
 }
 
 namespace {
 
+SDValue getGlobalAddress(SelectionDAG &DAG, const GlobalAddressSDNode *addr,
+                         EVT type, uint32_t flags = 0) {
+  return DAG.getTargetGlobalAddress(addr->getGlobal(), SDLoc{addr}, type, 0,
+                                    flags);
+}
+
+static SDValue getGlobalAddress(SelectionDAG &DAG,
+                                const BlockAddressSDNode *block, EVT type,
+                                uint32_t flags = 0) {
+  return DAG.getTargetBlockAddress(block->getBlockAddress(), type,
+                                   block->getOffset(), flags);
+}
+
+static SDValue getGlobalAddress(SelectionDAG &DAG,
+                                const ConstantPoolSDNode *pool, EVT type,
+                                uint32_t flags = 0) {
+  return DAG.getTargetConstantPool(pool->getConstVal(), type, pool->getAlign(),
+                                   pool->getOffset(), flags);
+}
+
+static SDValue getGlobalAddress(SelectionDAG &DAG, const JumpTableSDNode *jt,
+                                EVT type, uint32_t flags = 0) {
+  return DAG.getTargetJumpTable(jt->getIndex(), type, flags);
+}
+
+} // namespace
+
+template <typename NodeT>
+SDValue
+AltairXTargetLowering::getGlobalAddressWrapper(SelectionDAG &DAG,
+                                               const NodeT *node) const {
+  const EVT type = getPointerTy(DAG.getDataLayout());
+  const SDLoc dl{node};
+
+  // We may need to handle code model here
+  SDValue addr = getGlobalAddress(DAG, node, type);
+  return DAG.getNode(AltairXISD::GAWRAPPER, dl, type, addr);
+}
+
+SDValue AltairXTargetLowering::LowerGlobalAddress(SDValue Op,
+                                                  SelectionDAG &DAG) const {
+  return getGlobalAddressWrapper(DAG, cast<GlobalAddressSDNode>(Op));
+}
+
+SDValue AltairXTargetLowering::LowerConstantPool(SDValue Op,
+                                                 SelectionDAG &DAG) const {
+  return getGlobalAddressWrapper(DAG, cast<ConstantPoolSDNode>(Op));
+}
+
+SDValue AltairXTargetLowering::LowerBlockAddress(SDValue Op,
+                                                 SelectionDAG &DAG) const {
+  return getGlobalAddressWrapper(DAG, cast<BlockAddressSDNode>(Op));
+}
+
+SDValue AltairXTargetLowering::LowerJumpTable(SDValue Op,
+                                              SelectionDAG &DAG) const {
+  return getGlobalAddressWrapper(DAG, cast<JumpTableSDNode>(Op));
+}
+
+namespace {
+
+// Convert to target constant so this instruction won't be selected by
+// the tablegen pattern (set regclass:$rd, immpat:$imm)
 // In some cases the left operand must be a constant value. But this is not
 // natively supported. Example: "a > 5" becomes "5 < a".
 // This is a simple helper fonction that returns a new node to materialize
 // the constant, only if it is a constant!
 SDValue promoteConstant(SelectionDAG &DAG, SDLoc dl, SDValue node) {
   if (node.getOpcode() == ISD::Constant) {
-    auto constant = dyn_cast<ConstantSDNode>(node);
     const auto type = node.getValueType();
-    // Convert to target constant so this instruction won't be selected by
-    // the tablegen pattern (set regclass:$rd, immpat:$imm)
-    auto val = DAG.getTargetConstant(constant->getAPIntValue(), dl, type);
-    return DAG.getNode(AltairXISD::CONSTANTTOREG, dl, type, val);
+
+    if (auto *iconstant = dyn_cast<ConstantSDNode>(node); iconstant) {
+      auto val = DAG.getTargetConstant(iconstant->getAPIntValue(), dl, type);
+      return DAG.getNode(AltairXISD::CONSTANTTOREG, dl, type, val);
+      //} else if (auto *fconstant = dyn_cast<ConstantFPSDNode>(node);
+      //fconstant) {
+      //  auto val = DAG.getTargetConstantFP(fconstant->getValueAPF(), dl,
+      //  type); return DAG.getNode(AltairXISD::CONSTANTTOREG, dl, type, val);
+    } else {
+      llvm_unreachable("Expected constant SDNode");
+    }
   }
 
   return node;
@@ -706,19 +818,31 @@ std::optional<SETCCOperands> computeSETCCOperands(SDValue &Left, SDValue &Right,
                                                   ISD::CondCode CC) {
   switch (CC) {
   // Natively supported cases, this will be matched by tablegen patterns as-is
-  case ISD::SETUEQ:
+  case ISD::SETOEQ:
     [[fallthrough]]; // equal
+  case ISD::SETUEQ:
+    [[fallthrough]];
   case ISD::SETEQ:
     [[fallthrough]];
-  case ISD::SETUNE:
+  case ISD::SETONE:
     [[fallthrough]]; // not equal
+  case ISD::SETUNE:
+    [[fallthrough]];
   case ISD::SETNE:
     [[fallthrough]];
-  case ISD::SETLT:
+  case ISD::SETOLT:
     [[fallthrough]]; // less than
   case ISD::SETULT:
+    [[fallthrough]];
+  case ISD::SETLT:
     return std::nullopt;
   // Cases that need at least one modification
+  case ISD::SETOGT: // ordered >
+    return SETCCOperands{Right, Left, ISD::CondCode::SETOLT, false};
+  case ISD::SETOGE: // ordered >=
+    return SETCCOperands{Left, Right, ISD::CondCode::SETOLT, true};
+  case ISD::SETOLE: // ordered <=
+    return SETCCOperands{Right, Left, ISD::CondCode::SETOLT, true};
   case ISD::SETUGT: // unsigned >
     return SETCCOperands{Right, Left, ISD::CondCode::SETULT, false};
   case ISD::SETUGE: // unsigned >=
@@ -830,19 +954,31 @@ SelectCCOperands computeSelectCCOperands(SDValue &Left, SDValue &Right,
 
   switch (CC) {
   // Natively supported cases, this will be matched by tablegen patterns as-is
+  case ISD::SETOEQ:
+    [[fallthrough]]; // equal
   case ISD::SETUEQ:
     [[fallthrough]];
   case ISD::SETEQ:
     [[fallthrough]];
+  case ISD::SETONE:
+    [[fallthrough]]; // not equal
   case ISD::SETUNE:
     [[fallthrough]];
   case ISD::SETNE:
     [[fallthrough]];
+  case ISD::SETOLT:
+    [[fallthrough]]; // less than
   case ISD::SETULT:
     [[fallthrough]];
   case ISD::SETLT:
     return {{Left, Right, CC}, {TVal, FVal}};
   // Cases that need at least one modification
+  case ISD::SETOGT: // ordered >
+    return {{Right, Left, ISD::CondCode::SETOLT}, {TVal, FVal}};
+  case ISD::SETOGE: // ordered >=
+    return {{Left, Right, ISD::CondCode::SETOLT}, {FVal, TVal}};
+  case ISD::SETOLE: // ordered <=
+    return {{Right, Left, ISD::CondCode::SETOLT}, {FVal, TVal}};
   case ISD::SETUGT: // unsigned >
     return {{Right, Left, ISD::CondCode::SETULT}, {TVal, FVal}};
   case ISD::SETUGE: // unsigned >=
@@ -863,6 +999,27 @@ SelectCCOperands computeSelectCCOperands(SDValue &Left, SDValue &Right,
 
 } // namespace
 
+SDValue AltairXTargetLowering::LowerSELECT(SDValue Op,
+                                           SelectionDAG &DAG) const {
+  SDLoc dl{Op};
+  SDValue cond = Op.getOperand(0);
+  SDValue tval = Op.getOperand(1);
+  SDValue fval = Op.getOperand(2);
+
+  const auto type = tval.getValueType();
+
+  // left must not be constant!
+  SDValue realLeft = promoteConstant(DAG, dl, fval);
+
+  if (type.isFloatingPoint()) {
+    return DAG.getNode(AltairXISD::FCMOVE, dl, Op.getValueType(), fval, cond,
+                       tval);
+  }
+
+  return DAG.getNode(AltairXISD::CMOVE, dl, Op.getValueType(), fval, cond,
+                     tval);
+}
+
 SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
                                               SelectionDAG &DAG) const {
   SDLoc dl{Op};
@@ -872,6 +1029,8 @@ SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
   SDValue fval = Op.getOperand(3);
   const ISD::CondCode cc = cast<CondCodeSDNode>(Op.getOperand(4))->get();
 
+  const auto type = right.getValueType();
+
   auto [setccOps, cmoveOps] =
       computeSelectCCOperands(left, right, tval, fval, cc);
 
@@ -879,6 +1038,12 @@ SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
   SDValue realLeft = promoteConstant(DAG, dl, setccOps.left);
   SDValue setcc =
       DAG.getSetCC(dl, MVT::i8, realLeft, setccOps.right, setccOps.cc);
+
+  if (type.isFloatingPoint()) {
+    return DAG.getNode(AltairXISD::FCMOVE, dl, Op.getValueType(),
+                       cmoveOps.falseVal, setcc, cmoveOps.trueVal);
+  }
+
   return DAG.getNode(AltairXISD::CMOVE, dl, Op.getValueType(),
                      cmoveOps.falseVal, setcc, cmoveOps.trueVal);
 }
@@ -887,6 +1052,14 @@ namespace {
 
 AltairX::BRCondCode toAltairXBRCondCode(ISD::CondCode value) {
   switch (value) {
+  case ISD::SETOEQ:
+    return AltairX::BRCondCode::EQ;
+  case ISD::SETOGE:
+    return AltairX::BRCondCode::GEU;
+  case ISD::SETOLT:
+    return AltairX::BRCondCode::LTU;
+  case ISD::SETONE:
+    return AltairX::BRCondCode::NE;
   case ISD::SETUEQ:
     return AltairX::BRCondCode::EQ;
   case ISD::SETUGE:
@@ -941,7 +1114,14 @@ SDValue AltairXTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
 
   SDLoc dl{Op};
   SDValue realRight = promoteConstant(DAG, dl, right);
-  SDValue cmp = DAG.getNode(AltairXISD::CMP, dl, type, left, realRight);
+
+  SDValue cmp{};
+  if (type.isFloatingPoint()) {
+    cmp = DAG.getNode(AltairXISD::FCMP, dl, type, left, realRight);
+  } else {
+    cmp = DAG.getNode(AltairXISD::CMP, dl, type, left, realRight);
+  }
+
   SDValue ccval = DAG.getConstant(static_cast<uint64_t>(cc), dl, MVT::i32);
   return DAG.getNode(AltairXISD::BRCOND, dl, MVT::Other, chain, dest, ccval,
                      cmp);
@@ -953,16 +1133,6 @@ SDValue AltairXTargetLowering::LowerBRIND(SDValue Op, SelectionDAG &DAG) const {
   SDValue dest = Op.getOperand(1);
 
   return DAG.getNode(AltairXISD::INDIRECT_JUMP, dl, MVT::Other, chain, dest);
-}
-
-SDValue AltairXTargetLowering::LowerJumpTable(SDValue Op,
-                                              SelectionDAG &DAG) const {
-  SDLoc dl{Op};
-
-  auto *table = cast<JumpTableSDNode>(Op);
-  SDValue addr = DAG.getTargetJumpTable(table->getIndex(), MVT::i64);
-
-  return DAG.getNode(AltairXISD::GAWRAPPER, dl, MVT::i64, addr);
 }
 
 SDValue AltairXTargetLowering::LowerVASTART(SDValue Op,
