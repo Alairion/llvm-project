@@ -22,6 +22,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/Support/EndianStream.h"
 
 #define GET_INSTRINFO_ENUM
 #define GET_INSTRMAP_INFO
@@ -93,23 +94,26 @@ std::uint64_t AltairXMCCodeEmitter::getAbsBranchTargetOpValue(
 }
 
 void AltairXMCCodeEmitter::encodeInstruction(const MCInst &Inst,
-                                             raw_ostream &OS,
+                                             SmallVectorImpl<char> &CB,
                                              SmallVectorImpl<MCFixup> &Fixups,
                                              const MCSubtargetInfo &STI) const {
+
   if (Inst.getOpcode() == AltairX::BUNDLE) {
     const MCInst *first = Inst.getOperand(0).getInst();
     assert(first);
     auto firstOpcode = getBinaryCodeForInstr(*first, Fixups, STI);
     firstOpcode |= 1; // set first bit to one to indicate bundle!
-    OS.write(reinterpret_cast<const char *>(&firstOpcode), 4);
 
     const MCInst *second = Inst.getOperand(1).getInst();
     assert(second);
     const auto secondOpcode = getBinaryCodeForInstr(*second, Fixups, STI);
-    OS.write(reinterpret_cast<const char *>(&secondOpcode), 4);
+
+    support::endian::write<uint32_t>(CB, firstOpcode, llvm::endianness::little);
+    support::endian::write<uint32_t>(CB, secondOpcode,
+                                     llvm::endianness::little);
   } else {
     const auto opcode = getBinaryCodeForInstr(Inst, Fixups, STI);
-    OS.write(reinterpret_cast<const char *>(&opcode), 4);
+    support::endian::write<uint32_t>(CB, opcode, llvm::endianness::little);
   }
 }
 

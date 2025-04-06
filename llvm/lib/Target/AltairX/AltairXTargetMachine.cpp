@@ -23,15 +23,18 @@
 using namespace llvm;
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAltairXTarget() {
-  // Register the target.
-  //- Little endian Target Machine
   RegisterTargetMachine<AltairXTargetMachine> X(getTheAltairXTarget());
 
-  PassRegistry *PR = PassRegistry::getPassRegistry();
-  initializeAltairXMoveIXFillerPass(*PR);
+  PassRegistry& PR = *PassRegistry::getPassRegistry();
+  initializeAltairXDAGToDAGISelLegacyPass(PR);
+  initializeAltairXBranchPatcherPass(PR);
+  initializeAltairXMoveIXFillerPass(PR);
 }
 
-static std::string computeDataLayout() {
+namespace
+{
+
+std::string computeDataLayout() {
   return "e"              // Little endian
          "-m:e"           // ELF name mangling
          "-p:64:64:64:64" // 64-bit pointers, 64-bit aligned
@@ -40,7 +43,7 @@ static std::string computeDataLayout() {
          "-S64";          // 64-bit natural stack alignment
 }
 
-static Reloc::Model getEffectiveRelocModel(std::optional<CodeModel::Model> CM,
+Reloc::Model getEffectiveRelocModel(std::optional<CodeModel::Model> CM,
                                            std::optional<Reloc::Model> RM) {
 
   if (!RM) {
@@ -50,15 +53,18 @@ static Reloc::Model getEffectiveRelocModel(std::optional<CodeModel::Model> CM,
   return *RM;
 }
 
+}
+
 AltairXTargetMachine::AltairXTargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
                                            std::optional<Reloc::Model> RM,
                                            std::optional<CodeModel::Model> CM,
-                                           CodeGenOpt::Level OL, bool JIT)
-    : LLVMTargetMachine(T, computeDataLayout(), TT, CPU, FS, Options,
-                        getEffectiveRelocModel(CM, RM),
-                        getEffectiveCodeModel(CM, CodeModel::Medium), OL),
+                                           CodeGenOptLevel OL, bool JIT)
+    : CodeGenTargetMachineImpl(T, computeDataLayout(), TT, CPU, FS, Options,
+                               getEffectiveRelocModel(CM, RM),
+                               getEffectiveCodeModel(CM, CodeModel::Medium),
+                               OL),
       TLOF(std::make_unique<AltairXTargetObjectFile>()) {
   initAsmInfo();
 }
@@ -116,9 +122,7 @@ TargetPassConfig *AltairXTargetMachine::createPassConfig(PassManagerBase &PM) {
 // Install an instruction selector pass using
 // the ISelDag to gen AltairX code.
 bool AltairXPassConfig::addInstSelector() {
-  char ID;
-  addPass(
-      new AltairXDAGToDAGISel(ID, getAltairXTargetMachine(), getOptLevel()));
+  addPass(createAltairXISelDag(getAltairXTargetMachine(), getOptLevel()));
   return false;
 }
 

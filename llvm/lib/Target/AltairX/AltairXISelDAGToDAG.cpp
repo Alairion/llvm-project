@@ -18,6 +18,7 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "altairx-isel"
+#define PASS_NAME "AltairX Instruction Selection"
 
 bool AltairXDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
   Subtarget = &static_cast<const AltairXSubtarget &>(MF.getSubtarget());
@@ -181,3 +182,29 @@ void AltairXDAGToDAGISel::Select(SDNode *Node) {
   // Select the default instruction
   SelectCode(Node);
 }
+
+namespace
+{
+
+class AltairXDAGToDAGISelLegacy : public SelectionDAGISelLegacy {
+public:
+  static char ID;
+  explicit AltairXDAGToDAGISelLegacy(AltairXTargetMachine& tm,
+    CodeGenOptLevel OptLevel)
+    : SelectionDAGISelLegacy(
+      ID, std::make_unique<AltairXDAGToDAGISel>(tm, OptLevel))
+  {
+  }
+};
+
+} // end anonymous namespace
+
+char AltairXDAGToDAGISelLegacy::ID = 0;
+
+INITIALIZE_PASS(AltairXDAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false, false)
+
+FunctionPass *llvm::createAltairXISelDag(AltairXTargetMachine &TM,
+                                         CodeGenOptLevel OptLevel) {
+  return new AltairXDAGToDAGISelLegacy(TM, OptLevel);
+}
+

@@ -178,7 +178,8 @@ uint32_t getBitcastFMove(MCRegister reg) {
 void AltairXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                    MachineBasicBlock::iterator MI,
                                    const DebugLoc &DL, MCRegister DestReg,
-                                   MCRegister SrcReg, bool KillSrc) const {
+                                   MCRegister SrcReg, bool KillSrc, bool,
+                                   bool) const {
   using Info = AltairXRegisterInfo;
   if (Info::isGPIReg(DestReg) && Info::isGPIReg(SrcReg)) { // Add r, 0
     BuildMI(MBB, MI, DL, get(getGPIRegCopy(DestReg)), DestReg)
@@ -259,7 +260,7 @@ uint32_t getReloadOpcode(uint32_t spillSize, Register reg) {
 void AltairXInstrInfo::storeRegToStackSlot(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register SrcReg,
     bool KillSrc, int FrameIndex, const TargetRegisterClass *RC,
-    const TargetRegisterInfo *TRI, Register VReg [[maybe_unused]]) const {
+    const TargetRegisterInfo *TRI, Register, MachineInstr::MIFlag) const {
 
   MachineFunction &MF = *MBB.getParent();
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -281,7 +282,7 @@ void AltairXInstrInfo::storeRegToStackSlot(
 void AltairXInstrInfo::loadRegFromStackSlot(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register DestReg,
     int FrameIndex, const TargetRegisterClass *RC,
-    const TargetRegisterInfo *TRI, Register VReg [[maybe_unused]]) const {
+    const TargetRegisterInfo *TRI, Register, MachineInstr::MIFlag) const {
 
   MachineFunction &MF = *MBB.getParent();
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -482,7 +483,7 @@ void AltairXInstrInfo::makeBitcastToFloat(MachineInstr &inst, uint32_t add,
   auto it = inst.getIterator();
   if (it != block.getFirstNonDebugInstr()) {
     const auto previous = std::prev(it);
-    if (previous->findRegisterDefOperandIdx(srcReg, false, true, regInfo) != -1) {
+    if (previous->findRegisterDefOperandIdx(srcReg, regInfo, false, true) != -1) {
       BuildMI(block, inst, dl, get(add), AltairX::R56)
         .addReg(srcReg).addImm(0);
     }
@@ -524,7 +525,7 @@ void AltairXInstrInfo::makeBitcastToInt(MachineInstr &inst, uint32_t add,
   const auto it = inst.getIterator();
   if (it->getOpcode() != AltairX::KILL && it != block.getFirstNonDebugInstr()) {
     const auto previous = std::prev(it);
-    if (previous->findRegisterDefOperandIdx(srcReg, false, true, regInfo) != -1) {
+    if (previous->findRegisterDefOperandIdx(srcReg, regInfo, false, true) != -1) {
       BuildMI(block, inst, dl, get(fmove), AltairX::R56).addReg(srcReg);
     }
   } else {
@@ -776,7 +777,7 @@ MachineOperand *AltairXInstrInfo::getLatestRegDef(MachineInstr &inst,
       continue;
     }
 
-    MachineOperand *operand = inst.findRegisterDefOperand(reg, false, false);
+    MachineOperand *operand = inst.findRegisterDefOperand(reg, nullptr, false, false);
     if (operand) {
       return operand;
     }

@@ -21,13 +21,18 @@
 namespace llvm {
 class FunctionPass;
 class PassRegistry;
+class AltairXTargetMachine;
 
-// Declare functions to create passes here!
+// Selection DAG
+FunctionPass *createAltairXISelDag(AltairXTargetMachine &TM,
+                                   CodeGenOptLevel OptLevel);
+void initializeAltairXDAGToDAGISelLegacyPass(PassRegistry&);
+
+// AltairX passes
 FunctionPass* createAltairXBranchPatcherPass();
-void initializeAltairXBranchPatcherPass(PassRegistry&);
+FunctionPass* createAltairXMoveIXFillerPass();
 
-// Declare functions to create passes here!
-FunctionPass *createAltairXMoveIXFillerPass();
+void initializeAltairXBranchPatcherPass(PassRegistry&);
 void initializeAltairXMoveIXFillerPass(PassRegistry&);
 
 } // namespace llvm

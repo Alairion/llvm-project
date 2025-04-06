@@ -29,7 +29,7 @@ char AltairXBranchPatcher::ID = 0;
 INITIALIZE_PASS_BEGIN(AltairXBranchPatcher, "altairx-branch-patcher",
                       "Replace PseudoBRC with BRC and fix related operations",
                       false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineBranchProbabilityInfo)
+INITIALIZE_PASS_DEPENDENCY(MachineBranchProbabilityInfoWrapperPass)
 INITIALIZE_PASS_END(AltairXBranchPatcher, "altairx-branch-patcher",
                     "Replace PseudoBRC with BRC and fix related operations",
                     false, false)
@@ -43,14 +43,15 @@ AltairXBranchPatcher::AltairXBranchPatcher() : MachineFunctionPass(ID) {
 }
 
 void AltairXBranchPatcher::getAnalysisUsage(AnalysisUsage &analysis) const {
-  analysis.addRequired<MachineBranchProbabilityInfo>();
+  analysis.addRequired<MachineBranchProbabilityInfoWrapperPass>();
   MachineFunctionPass::getAnalysisUsage(analysis);
 }
 
 bool AltairXBranchPatcher::runOnMachineFunction(MachineFunction &func) {
   target = &func.getTarget();
   instInfo = func.getSubtarget<AltairXSubtarget>().getInstrInfo();
-  branchInfo = &getAnalysis<MachineBranchProbabilityInfo>();
+  branchInfo =
+      &getAnalysis<MachineBranchProbabilityInfoWrapperPass>().getMBPI();
 
   for (auto &block : func) {
     runOnMachineBasicBlock(block);

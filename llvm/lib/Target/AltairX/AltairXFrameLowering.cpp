@@ -28,7 +28,7 @@ using namespace llvm;
 // pointer register.  This is true if the function has variable sized allocas,
 // if it needs dynamic stack realignment, if frame pointer elimination is
 // disabled, or if the frame address is taken.
-bool AltairXFrameLowering::hasFP(const MachineFunction &MF) const {
+bool AltairXFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
 

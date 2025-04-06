@@ -58,7 +58,7 @@ public:
                                           const MCSubtargetInfo &STI) const;
 
 protected:
-  void encodeInstruction(const MCInst &Inst, raw_ostream &OS,
+  void encodeInstruction(const MCInst &Inst, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
 

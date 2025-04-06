@@ -48,8 +48,7 @@ public:
   void EmitToStreamer(MCStreamer &S, const MCInst &Inst);
 
   // Auto-generated function in AltairXGenMCPseudoLowering.inc
-  bool emitPseudoExpansionLowering(MCStreamer &OutStreamer,
-                                   const MachineInstr *MI);
+  bool lowerPseudoInstExpansion(const MachineInstr* MI, MCInst& Inst);
 
   // Emit a bundle or a single instruction to associated streamer
   void emitInstruction(const MachineInstr *MI) override;
@@ -72,7 +71,8 @@ void AltairXAsmPrinter::EmitToStreamer(MCStreamer &S, const MCInst &Inst) {
 
 void AltairXAsmPrinter::emitInstruction(const MachineInstr *MI) {
   // Do any auto-generated pseudo lowerings.
-  if (emitPseudoExpansionLowering(*OutStreamer, MI)) {
+  if(MCInst OutInst; lowerPseudoInstExpansion(MI, OutInst)) {
+    EmitToStreamer(*OutStreamer, OutInst);
     return;
   }
 
