@@ -184,6 +184,8 @@ class AltairXOpcodeEFU<bits<4> val>
 }
 
 def OPCODE_FDIV  : AltairXOpcodeEFU<0b0000>;
+def OPCODE_FSQRT : AltairXOpcodeEFU<0b0100>;
+def OPCODE_FSIN  : AltairXOpcodeEFU<0b1100>;
 
 def OPCODE_SETEF : AltairXOpcodeEFU<0b0111>;
 def OPCODE_GETEF : AltairXOpcodeEFU<0b1111>;
@@ -495,6 +497,17 @@ class AltairXInstFCMPRR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, l
 // EFU
 class AltairXInstEFURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 
   : AltairXInstMDURR<opcode, size, outs, ins, pattern, opcodestr, argstr> {
+}
+
+class AltairXInstEFUUnary<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatUnary> {
+  bits<6> rs1;
+
+  let Inst{31-26} = 0b111111; // zero
+  let Inst{25-20} = rs1;
+  let Inst{19-14} = 0b111111; // zero
+  let Inst{9-8} = size;
+  let Opcode = opcode.Value;
 }
 
 class AltairXInstEFUGetEF<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr> 

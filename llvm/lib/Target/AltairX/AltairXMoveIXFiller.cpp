@@ -70,8 +70,10 @@ bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
   case AltairX::InstFormatBRUAbsImm24:
     return llvm::isUInt<26>(
         static_cast<std::uint64_t>(imm)); // always aligned on 4 bytes
+  case AltairX::InstFormatCMPRegImm9:
+    return llvm::isInt<9>(imm);
   default:
-    return false;
+    llvm_unreachable("Unknown instruction type!");
   }
 }
 
@@ -124,7 +126,7 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
   case AltairX::InstFormatCMPRegImm9:
     return AltairX::MOVEIX9;
   default:
-    return false;
+    llvm_unreachable("Unknown instruction type!");
   }
 }
 

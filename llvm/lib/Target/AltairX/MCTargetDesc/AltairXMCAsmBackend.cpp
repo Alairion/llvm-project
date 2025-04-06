@@ -32,6 +32,8 @@
 
 namespace llvm {
 
+#define DEBUG_TYPE "AltairXMCAsmBackend"
+
 std::unique_ptr<MCObjectTargetWriter>
 AltairXMCAsmBackend::createObjectTargetWriter() const {
   return std::make_unique<AltairXELFObjectWriter>(
@@ -168,7 +170,15 @@ uint64_t getMoveIXHighUnsignedValue(uint64_t value) noexcept {
 uint64_t AltairXMCAsmBackend::adjustImmValue(MCFixupKind kind,
                                              uint64_t value) noexcept {
 
-  switch (static_cast<AltairX::Fixups>(kind)) {
+  switch (static_cast<uint32_t>(kind)) {
+  case FK_Data_1:
+    return value;
+  case FK_Data_2:
+    return value;
+  case FK_Data_4:
+    return value;
+  case FK_Data_8:
+    return value;
   case AltairX::fixup_altairx_pcrel23lo:
     return getMoveIXLowSignedValue<23, 4>(value);
   case AltairX::fixup_altairx_pcrel23hi:
