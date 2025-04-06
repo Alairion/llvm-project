@@ -8,6 +8,7 @@
 
 #include "clang/Driver/Driver.h"
 #include "ToolChains/AIX.h"
+#include "ToolChains/AltairX.h"
 #include "ToolChains/AMDGPU.h"
 #include "ToolChains/AMDGPUOpenMP.h"
 #include "ToolChains/AVR.h"
@@ -6775,6 +6776,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         break;
       case llvm::Triple::csky:
         TC = std::make_unique<toolchains::CSKYToolChain>(*this, Target, Args);
+        break;
+      case llvm::Triple::altairx:
+        TC = std::make_unique<toolchains::AltairXToolChain>(*this, Target, Args);
         break;
       default:
         if (toolchains::BareMetal::handlesTarget(Target))
