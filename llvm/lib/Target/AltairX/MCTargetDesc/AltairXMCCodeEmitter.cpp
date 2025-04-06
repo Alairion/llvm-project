@@ -123,13 +123,16 @@ MCFixupKind AltairXMCCodeEmitter::getImmFixupFor(const MCInst &MI) const {
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_abs24lo);
   case AltairX::InstFormatALURegImm9:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9lo);
+  case AltairX::InstFormatALURegRegImm9:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9lo);
   case AltairX::InstFormatLSURegImm10:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix10lo);
   case AltairX::InstFormatMoveImm18:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix18lo);
+  case AltairX::InstFormatCMPRegImm9:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9lo);
   default:
     llvm_unreachable("Missing MoveIX impl");
-    return FK_NONE;
   }
 }
 
@@ -149,7 +152,6 @@ MCFixupKind AltairXMCCodeEmitter::getMoveIXFixupFor(const MCInst &MI) const {
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix18hi);
   default:
     llvm_unreachable("Missing MoveIX impl");
-    return FK_NONE;
   }
 }
 

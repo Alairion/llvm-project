@@ -71,6 +71,8 @@ def AltairXGlobalAddrValue : AltairXPseudo<
 
 def : Pat<(AltairXGAWRAPPER tjumptable:$addr),
   (AltairXGlobalAddrValue tjumptable:$addr)>;
+def : Pat<(AltairXGAWRAPPER tconstpool:$addr),
+  (AltairXGlobalAddrValue tconstpool:$addr)>;
 
 //===----------------------------------------------------------------------===//
 // Procedure calling
@@ -297,6 +299,7 @@ def moveiximm : Operand<i64> {
 def MOVEIX23PCREL : AltairXInstMoveIX<InstFormatBRURelImm23, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX24PCREL : AltairXInstMoveIX<InstFormatBRURelImm24, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX24ABS : AltairXInstMoveIX<InstFormatBRUAbsImm24, (outs), (ins moveiximm:$imm), []>;
+// Also used for InstFormatCMPRegImm9 and InstFormatALURegRegImm9:
 def MOVEIX9 : AltairXInstMoveIX<InstFormatALURegImm9, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX10 : AltairXInstMoveIX<InstFormatLSURegImm10, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX18 : AltairXInstMoveIX<InstFormatMoveImm18, (outs), (ins moveiximm:$imm), []>;
@@ -771,8 +774,8 @@ let isReMaterializable = 1, hasSideEffects = 0, mayStore = 1 in
 class StoreRRInst<AltairXOpcode opcode, RegisterClass regclass, SDPatternOperator opnode, string name, bits<2> size, string sizename>
   : AltairXInstLSURR<opcode, size,
   (outs),
-  (ins regclass:$reg, GPIReg64:$base, GPIReg64:$offset, i64imm:$shift),
-  [(opnode regclass:$reg, (addr GPIReg64:$base, GPIReg64:$offset, i64imm:$shift))],
+  (ins regclass:$reg, GPIReg64:$base, GPIReg64:$offset, shiftAmount:$shift),
+  [(opnode regclass:$reg, (addr GPIReg64:$base, GPIReg64:$offset, u64imm3:$shift))],
   !strconcat(name, ".", sizename), "$reg, $base[$offset << $shift]"> {
 }
 
@@ -869,7 +872,7 @@ class SCMPInstRI<AltairXOpcode opcode, string name, bits<2> size, string sizenam
     !strconcat(name, ".", sizename), "$rd, $rs1, $imm"> {
 }
 
-multiclass SCMPInstImpl<AltairXOpcode opcode, string name, SDPatternOperator setccop> {
+multiclass SCMPInst<AltairXOpcode opcode, string name, SDPatternOperator setccop> {
   def RRb : SCMPInstRR<opcode, name, 0, "b", setccop, GPIReg8>;
   def RRw : SCMPInstRR<opcode, name, 1, "w", setccop, GPIReg16>;
   def RRd : SCMPInstRR<opcode, name, 2, "d", setccop, GPIReg32>;
@@ -880,16 +883,16 @@ multiclass SCMPInstImpl<AltairXOpcode opcode, string name, SDPatternOperator set
   def RIq : SCMPInstRI<opcode, name, 3, "q", setccop, GPIReg64, i64imm, s64imm32>;
 }
 
-defm Se : SCMPInstImpl<OPCODE_SE, "se", seteq>;
-defm Sen : SCMPInstImpl<OPCODE_SEN, "sen", setne>;
-defm Slts : SCMPInstImpl<OPCODE_SLTS, "slts", setlt>;
-defm Sltu : SCMPInstImpl<OPCODE_SLTU, "sltu", setult>;
+defm Se   : SCMPInst<OPCODE_SE, "se", seteq>;
+defm Sen  : SCMPInst<OPCODE_SEN, "sen", setne>;
+defm Slts : SCMPInst<OPCODE_SLTS, "slts", setlt>;
+defm Sltu : SCMPInst<OPCODE_SLTU, "sltu", setult>;
 
 // iX = AltairXISD::SBIT $rA, $rB
 def SDT_AltairXsbit : SDTypeProfile<1, 2, [SDTCisInt<0>, SDTCisInt<1>, SDTCisSameAs<1, 2>]>;
 def AltairXsbit : SDNode<"AltairXISD::SBIT", SDT_AltairXsbit, []>;
 
-class SBITInstRR<bits<2> size, RegisterClass regclass>
+class SBitInstRR<bits<2> size, RegisterClass regclass>
   : AltairXInstALURR<OPCODE_SBIT, size,
     (outs GPIReg8:$rd),
     (ins regclass:$rs1, regclass:$rs2),
@@ -897,7 +900,7 @@ class SBITInstRR<bits<2> size, RegisterClass regclass>
     "sbit", "$rd, $rs1, $rs2"> {
 }
 
-class SBITInstRI<bits<2> size, RegisterClass regclass, Operand immop, ImmLeaf immpat>
+class SBitInstRI<bits<2> size, RegisterClass regclass, Operand immop, ImmLeaf immpat>
   : AltairXInstALURI<OPCODE_SBIT, size,
     (outs GPIReg8:$rd),
     (ins regclass:$rs1, immop:$imm),
@@ -905,14 +908,14 @@ class SBITInstRI<bits<2> size, RegisterClass regclass, Operand immop, ImmLeaf im
     "sbit", "$rd, $rs1, $imm"> {
 }
 
-def SBitRRb : SBITInstRR<0, GPIReg8>;
-def SBitRRw : SBITInstRR<1, GPIReg16>;
-def SBitRRd : SBITInstRR<2, GPIReg32>;
-def SBitRRq : SBITInstRR<3, GPIReg64>;
-def SBitRIb : SBITInstRI<0, GPIReg8,  i8imm,  s8imm32>;
-def SBitRIw : SBITInstRI<1, GPIReg16, i16imm, s16imm32>;
-def SBitRId : SBITInstRI<2, GPIReg32, i32imm, s32imm32>;
-def SBitRIq : SBITInstRI<3, GPIReg64, i64imm, s64imm32>;
+def SBitRRb : SBitInstRR<0, GPIReg8>;
+def SBitRRw : SBitInstRR<1, GPIReg16>;
+def SBitRRd : SBitInstRR<2, GPIReg32>;
+def SBitRRq : SBitInstRR<3, GPIReg64>;
+def SBitRIb : SBitInstRI<0, GPIReg8,  i8imm,  s8imm32>;
+def SBitRIw : SBitInstRI<1, GPIReg16, i16imm, s16imm32>;
+def SBitRId : SBitInstRI<2, GPIReg32, i32imm, s32imm32>;
+def SBitRIq : SBitInstRI<3, GPIReg64, i64imm, s64imm32>;
 
 // iX = AltairXISD::CMOVE tval, fval, bool
 def SDT_AltairXcmove : SDTypeProfile<1, 3, [SDTCisInt<0>, SDTCisInt<1>, SDTCisSameAs<1, 3>, SDTCisVT<2, i8>]>;
@@ -952,7 +955,8 @@ def CMoveRIq : CMoveRIInst<3, "q", GPIReg64, i64imm, s64imm32>;
 //===----------------------------------------------------------------------===//
 
 // Basic operations
-class FPUInstRR<string name, bits<2> size, string sizename, AltairXOpcode opcode, PatFrags opnode, RegisterClass regclass>
+class FPUInstRR<string name, bits<2> size, string sizename, AltairXOpcode opcode,
+  SDPatternOperator opnode, RegisterClass regclass>
   : AltairXInstFPURR<opcode, size,
     (outs regclass:$rd),
     (ins regclass:$rs1, regclass:$rs2),
@@ -960,14 +964,32 @@ class FPUInstRR<string name, bits<2> size, string sizename, AltairXOpcode opcode
     !strconcat(name, ".", sizename), "$rd, $rs1, $rs2"> {
 }
 
-def FAddRRs : FPUInstRR<"fadd", 1, "s", OPCODE_FADD, any_fadd, FReg32>;
-def FAddRRd : FPUInstRR<"fadd", 2, "d", OPCODE_FADD, any_fadd, FReg64>;
+multiclass FPUInst<string name, AltairXOpcode opcode, SDPatternOperator opnode> {
+  def RRs : FPUInstRR<name, 1, "s", opcode, opnode, FReg32>;
+  def RRd : FPUInstRR<name, 2, "d", opcode, opnode, FReg64>;
+}
 
-def FSubRRs : FPUInstRR<"fsub", 1, "s", OPCODE_FSUB, any_fsub, FReg32>;
-def FSubRRd : FPUInstRR<"fsub", 2, "d", OPCODE_FSUB, any_fsub, FReg64>;
+defm FAdd : FPUInst<"fadd", OPCODE_FADD, any_fadd>;
+defm FSub : FPUInst<"fsub", OPCODE_FSUB, any_fsub>;
+defm FMul : FPUInst<"fmul", OPCODE_FMUL, any_fmul>;
 
-def FMulRRs : FPUInstRR<"fmul", 1, "s", OPCODE_FMUL, any_fmul, FReg32>;
-def FMulRRd : FPUInstRR<"fmul", 2, "d", OPCODE_FMUL, any_fmul, FReg64>;
+// Float unary operations
+class FPUInstR<string name, bits<2> size, string sizename, AltairXOpcode opcode,
+  SDPatternOperator opnode, RegisterClass regclass>
+  : AltairXInstFPUUnary<opcode, size,
+    (outs regclass:$rd),
+    (ins regclass:$rs1),
+    [(set regclass:$rd, (opnode regclass:$rs1))],
+    !strconcat(name, ".", sizename), "$rd, $rs1"> {
+}
+
+multiclass FPUInstUnary<string name, AltairXOpcode opcode, SDPatternOperator opnode> {
+  def Rs : FPUInstR<name, 1, "s", opcode, opnode, FReg32>;
+  def Rd : FPUInstR<name, 2, "d", opcode, opnode, FReg64>;
+}
+
+defm FNeg : FPUInstUnary<"fneg", OPCODE_FNEG, fneg>;
+defm FAbs : FPUInstUnary<"fabs", OPCODE_FABS, fabs>;
 
 // Float copy
 class FPUInstMove<bits<2> size, string sizename, RegisterClass regclass>
@@ -980,7 +1002,6 @@ class FPUInstMove<bits<2> size, string sizename, RegisterClass regclass>
 
 def FMoveRs : FPUInstMove<1, "s", FReg32>;
 def FMoveRd : FPUInstMove<2, "d", FReg64>;
-
 def VIMoveRb : FPUInstMove<1, "d", VIReg8>; // int version for compatibility
 
 // iX = AltairXISD::ITOF/FTOI outval, inval
@@ -990,20 +1011,14 @@ def SDT_AltairXftoi : SDTypeProfile<1, 1, [SDTCisVT<0, f64>, SDTCisFP<1>]>;
 def AltairXftoi : SDNode<"AltairXISD::FTOI", SDT_AltairXftoi, []>;
 
 // Float conversions (extend, trunc, int <-> float)
-class FPUCastInst<string name, bits<2> size, AltairXOpcode opcode, SDPatternOperator opnode, RegisterClass outclass, RegisterClass inclass>
+class FPUCastInst<string name, bits<2> size, AltairXOpcode opcode,
+  SDPatternOperator opnode, RegisterClass outclass, RegisterClass inclass>
   : AltairXInstFPUUnary<opcode, size,
     (outs outclass:$rd),
     (ins inclass:$rs1),
     [(set outclass:$rd, (opnode inclass:$rs1))],
     name, "$rd, $rs1"> {
 }
-
-/*
-any_sint_to_fp
-any_uint_to_fp // unsupported for u64
-any_fp_to_sint
-any_fp_to_uint // unsupported for u64
-*/
 
 // From int
 def IqToFs : FPUCastInst<"itof", 1, OPCODE_ITOF, AltairXitof, FReg32, FReg64>;
@@ -1041,7 +1056,7 @@ def FCmpRRd : FCMPInstRR<2, "d", FReg64>;
 // - Less than (lt)
 // - Greater than predicate can be matched by swapping the compared values: (a > b) -> (b < a)
 // Greater or equal, less than or equal, need an additional xor or setne, this is done during ISelLowering
-class FSCMPInstRR<AltairXOpcode opcode, string name, bits<2> size, string sizename,
+class FSCMPInstRR<string name, bits<2> size, string sizename, AltairXOpcode opcode,
   SDPatternOperator setccop, RegisterClass regclass>
   : AltairXInstALURR<opcode, size,
     (outs VIReg8:$rd),
@@ -1050,14 +1065,14 @@ class FSCMPInstRR<AltairXOpcode opcode, string name, bits<2> size, string sizena
     !strconcat(name, ".", sizename), "$rd, $rs1, $rs2"> {
 }
 
-multiclass FSCMPInstImpl<AltairXOpcode opcode, string name, SDPatternOperator setccop> {
-  def RRs : FSCMPInstRR<opcode, name, 1, "s", setccop, FReg32>;
-  def RRd : FSCMPInstRR<opcode, name, 2, "d", setccop, FReg64>;
+multiclass FSCMPInst<string name, AltairXOpcode opcode, SDPatternOperator setccop> {
+  def RRs : FSCMPInstRR<name, 1, "s", opcode, setccop, FReg32>;
+  def RRd : FSCMPInstRR<name, 2, "d", opcode, setccop, FReg64>;
 }
 
-defm FSe  : FSCMPInstImpl<OPCODE_FSE,  "fse",  seteq>;
-defm FSen : FSCMPInstImpl<OPCODE_FSEN, "fsen", seteq>;
-defm FSlt : FSCMPInstImpl<OPCODE_FSLT, "fslt", setlt>;
+defm FSe  : FSCMPInst<"fse",  OPCODE_FSE,  setoeq>;
+defm FSen : FSCMPInst<"fsen", OPCODE_FSEN, setone>;
+defm FSlt : FSCMPInst<"fslt", OPCODE_FSLT, setolt>;
 
 // iX = AltairXISD::FCMOVE tval, fval, bool
 def SDT_AltairXfcmove : SDTypeProfile<1, 3, [SDTCisFP<0>, SDTCisFP<1>, SDTCisSameAs<1, 3>, SDTCisVT<2, i8>]>;
@@ -1083,7 +1098,7 @@ def FCMoveRRd : FCMoveRRInst<2, "d", FReg64>;
 // This instruction is specified as "no outs" because register allocation seems to behave
 // incorrectly with forced registers that are part of a register class.
 class EFUInstRR<string name, bits<2> size, string sizename, AltairXOpcode opcode,
-  PatFrags opnode, Register outreg, RegisterClass inclass>
+  SDPatternOperator opnode, Register outreg, RegisterClass inclass>
   : AltairXInstEFURR<opcode, size,
     (outs),
     (ins inclass:$rs1, inclass:$rs2),
@@ -1092,8 +1107,30 @@ class EFUInstRR<string name, bits<2> size, string sizename, AltairXOpcode opcode
   let Defs = [outreg];
 }
 
-def FDivRRs : EFUInstRR<"fdiv", 1, "s", OPCODE_FDIV, any_fdiv, VQs, FReg32>;
-def FDivRRd : EFUInstRR<"fdiv", 2, "d", OPCODE_FDIV, any_fdiv, VQd, FReg64>;
+multiclass EFUInst<string name, AltairXOpcode opcode, SDPatternOperator opnode> {
+  def RRs : EFUInstRR<name, 1, "s", opcode, opnode, VQs, FReg32>;
+  def RRd : EFUInstRR<name, 2, "d", opcode, opnode, VQd, FReg64>;
+}
+
+defm FDiv : EFUInst<"fdiv", OPCODE_FDIV, any_fdiv>;
+
+class EFUInstR<string name, bits<2> size, string sizename, AltairXOpcode opcode,
+  SDPatternOperator opnode, Register outreg, RegisterClass inclass>
+  : AltairXInstEFUUnary<opcode, size,
+    (outs),
+    (ins inclass:$rs1),
+    [(set outreg, (opnode inclass:$rs1))],
+    !strconcat(name, ".", sizename), "$rs1"> {
+  let Defs = [outreg];
+}
+
+multiclass EFUUnaryInst<string name, AltairXOpcode opcode, SDPatternOperator opnode> {
+  def Rs : EFUInstR<name, 1, "s", opcode, opnode, VQs, FReg32>;
+  def Rd : EFUInstR<name, 2, "d", opcode, opnode, VQd, FReg64>;
+}
+
+defm FSqrt : EFUUnaryInst<"fsqrt", OPCODE_FSQRT, fsqrt>;
+defm FSin  : EFUUnaryInst<"fsin", OPCODE_FSIN, fsin>;
 
 class GetEFInst<RegisterClass outclass, RegisterClass inclass>
   : AltairXInstEFUGetEF<OPCODE_SETEF,
@@ -1116,72 +1153,6 @@ class SetEFInst<RegisterClass outclass, RegisterClass inclass>
 
 def SetEFs : SetEFInst<EFReg32, FReg32>;
 def SetEFd : SetEFInst<EFReg64, FReg64>;
-
-// Simple binary floating point operators
-// FADD: supported
-// FSUB: supported
-// FMUL: supported
-// FDIV: supported
-// FREM: supported?
-// FMA: expand - Perform a * b + c with no intermediate rounding step.
-// FMAD: expand - Perform a * b + c, while getting the same result as the separately rounded operations.
-
-// Simple unary floating point operators
-// FNEG: supported
-// FABS: supported
-// FSQRT: supported
-// FCBRT: expand (libcall)
-// FSIN: supported
-// FCOS: expand (no libcall?)
-// FTAN: supported
-// FASIN: expand (libcall)
-// FACOS: expand (libcall)
-// FATAN: supported
-// FSINH: expand (libcall)
-// FCOSH: expand (libcall)
-// FTANH: expand (libcall)
-// FPOW: expand (libcall) float exponent
-// FPOWI: expand (libcall) integer exponent
-// FLDEXP: expand (libcall) ldexp, inspired by libm (op0 * 2**op1).
-// FATAN2: supported atan2, inspired by libm.
-// FFREXP: expand (libcall) frexp, extract fractional and exponent component of a floating-point value. Returns the two components as separate return values.
-// FLOG: expand (libcall)
-// FLOG2: expand (libcall)
-// FLOG10: expand (libcall)
-// FEXP: supported
-// FEXP2: expand (libcall)
-// FEXP10: expand (libcall)
-
-// Int/float conversions
-// FP_TO_[US]INT: supported Convert a floating point value to a signed or unsigned integer. - These have the same semantics as fptosi and fptoui in IR. If the FP value cannot fit in the integer type, the results are undefined.
-// FP_TO_[US]INT_SAT: expand (libcall) NaN -> zero; out of range -> min/max; rounding towards zero
-
-// Rounding functions
-// FCEIL: expand (libcall) closest int bigger than input
-// FFLOOR: expand (libcall) closest int smaller than input
-// FTRUNC: expand (libcall) closest toward 0
-// FRINT: expand (libcall) Ties to even (default mode)
-// FNEARBYINT: expand (libcall) (float to int) Ties to even (default mode)
-// FROUND: expand (libcall) Away from 0
-// FROUNDEVEN: expand (libcall) Ties to even
-// SET/GET_ROUNDING: expand (libcall) -> NOOP (unsupported)
-// L(L)ROUND: expand (libcall) Casting (float to int) Ties to even (default mode)
-// L(L)RINT: expand (libcall) Casting (float to int) rounding operation toward 0
-// FP_ROUND: expand (libcall) Casting (float to float) rounding operation toward 0
-// FP_EXTEND: expand (libcall) Extend a smaller FP type into a larger FP type.
-
-// FCOPYSIGN: expand (libcall) Return the value of X with the sign of Y.
-// FGETSIGN: expand (libcall)	Return the sign bit of the specified floating point value as an integer 0/1 value.
-// FCANONICALIZE: ???? Returns platform specific canonical encoding of a floating point number.
-
-// These operators are used to perform promotions and truncation for half-precision (16 bit) floating numbers.
-// FP16_TO_FP, FP_TO_FP16: supported
-
-// FMINNUM/FMAXNUM: supported NaN, notNaN -> notNaN, 0.0, -0.0 -> 0.0 or -0.0 IEEE 754-2008 semantics
-// FMINIMUM/FMAXIMUM: expand (libcall) follow IEEE 754-2019 semantics.
-// FMINIMUMNUM/FMAXIMUMNUM: expand (libcall) same with FMINNUM_IEEE and FMAXNUM_IEEE besides if either operand is sNaN
-
-// FSINCOS: expand
 
 //===----------------------------------------------------------------------===//
 // Miscellaneous

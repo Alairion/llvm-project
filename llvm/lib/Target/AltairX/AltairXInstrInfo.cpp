@@ -159,6 +159,7 @@ uint32_t getBitcastAdd(MCRegister reg) {
 
   llvm_unreachable("Wrong register class");
 }
+
 uint32_t getBitcastFMove(MCRegister reg) {
 
   if (AltairX::FReg64RegClass.contains(reg)) {
@@ -374,6 +375,10 @@ void AltairXInstrInfo::expandPostRAGlobalAddrValue(MachineInstr &inst) const {
     BuildMI(block, inst, inst.getDebugLoc(), get(AltairX::MoveIq))
         .addReg(dest, getDefRegState(true))
         .addJumpTableIndex(addr.getIndex());
+  } else if(addr.isCPI()) {
+    BuildMI(block, inst, inst.getDebugLoc(), get(AltairX::MoveIq))
+      .addReg(dest, getDefRegState(true))
+      .addConstantPoolIndex(addr.getIndex());
   } else {
     llvm_unreachable("Unsupported operand type!");
   }
@@ -477,7 +482,7 @@ void AltairXInstrInfo::makeBitcastToFloat(MachineInstr &inst, uint32_t add,
   auto it = inst.getIterator();
   if (it != block.getFirstNonDebugInstr()) {
     const auto previous = std::prev(it);
-    if (!previous->definesRegister(srcReg, regInfo)) {
+    if (previous->findRegisterDefOperandIdx(srcReg, false, true, regInfo) != -1) {
       BuildMI(block, inst, dl, get(add), AltairX::R56)
         .addReg(srcReg).addImm(0);
     }
@@ -490,9 +495,8 @@ void AltairXInstrInfo::makeBitcastToFloat(MachineInstr &inst, uint32_t add,
   if (it != block.getLastNonDebugInstr()) {
     const auto next = std::next(it);
     if (!isNoop(*next) && next->killsRegister(destReg, regInfo)) {
-      for (auto &op :
-           make_range(next->operands_begin() + 1, next->operands_end())) {
-        if (op.isReg() && op.getReg() == destReg) {
+      for (auto &op : next->operands()) {
+        if (op.isReg() && !op.isDef() && op.getReg() == destReg) {
           op.setReg(AltairX::R57);
         }
       }
@@ -520,7 +524,7 @@ void AltairXInstrInfo::makeBitcastToInt(MachineInstr &inst, uint32_t add,
   const auto it = inst.getIterator();
   if (it->getOpcode() != AltairX::KILL && it != block.getFirstNonDebugInstr()) {
     const auto previous = std::prev(it);
-    if (!previous->definesRegister(srcReg, regInfo)) {
+    if (previous->findRegisterDefOperandIdx(srcReg, false, true, regInfo) != -1) {
       BuildMI(block, inst, dl, get(fmove), AltairX::R56).addReg(srcReg);
     }
   } else {
@@ -532,9 +536,8 @@ void AltairXInstrInfo::makeBitcastToInt(MachineInstr &inst, uint32_t add,
   if (it != block.getLastNonDebugInstr()) {
     const auto next = std::next(it);
     if (!isNoop(*next) && next->killsRegister(destReg, regInfo)) {
-      for (auto &op :
-           make_range(next->operands_begin() + 1, next->operands_end())) {
-        if (op.isReg() && op.getReg() == destReg) {
+      for (auto &op : next->operands()) {
+        if (op.isReg() && !op.isDef() && op.getReg() == destReg) {
           op.setReg(AltairX::R59);
         }
       }
