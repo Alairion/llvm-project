@@ -237,9 +237,8 @@ void AltairXMCAsmBackend::applyFixup(const MCAssembler &Asm,
 }
 
 // Target Relaxation Interfaces
-bool AltairXMCAsmBackend::fixupNeedsRelaxation(
-    const MCFixup &Fixup, uint64_t Value, const MCRelaxableFragment *DF,
-    const MCAsmLayout &Layout) const {
+bool AltairXMCAsmBackend::mayNeedRelaxation(const MCInst &Inst,
+                                            const MCSubtargetInfo &STI) const {
   return false;
 }
 

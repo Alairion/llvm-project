@@ -34,7 +34,7 @@ AltairXInstPrinter::AltairXInstPrinter(const MCAsmInfo &MAI,
                                        const MCRegisterInfo &MRI)
     : MCInstPrinter(MAI, MII, MRI) {}
 
-void AltairXInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
+void AltairXInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) {
   OS << getRegisterName(Reg, AltairX::AltairXRegPrettyNameIndex);
 }
 

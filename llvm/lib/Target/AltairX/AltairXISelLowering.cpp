@@ -391,7 +391,8 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
 
 bool AltairXTargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool isVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
+    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context,
+    const Type *) const {
   SmallVector<CCValAssign, 16> RVLocs;
   CCState ccInfo{CallConv, isVarArg, MF, RVLocs, Context};
   return ccInfo.CheckReturn(Outs, AltairX_CRetConv);

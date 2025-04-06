@@ -17,11 +17,11 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
-#include "llvm/Target/TargetMachine.h"
+#include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
 
 namespace llvm {
 
-class AltairXTargetMachine : public LLVMTargetMachine {
+class AltairXTargetMachine : public CodeGenTargetMachineImpl {
 
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
   mutable StringMap<std::unique_ptr<AltairXSubtarget>> SubtargetMap;
@@ -30,7 +30,7 @@ public:
   AltairXTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                        StringRef FS, const TargetOptions &Options,
                        std::optional<Reloc::Model> RM,
-                       std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL,
+                       std::optional<CodeModel::Model> CM, CodeGenOptLevel OL,
                        bool JIT);
 
   MachineFunctionInfo *

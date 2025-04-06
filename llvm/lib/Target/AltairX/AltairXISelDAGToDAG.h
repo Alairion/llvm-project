@@ -20,14 +20,8 @@
 namespace llvm {
 class AltairXDAGToDAGISel : public SelectionDAGISel {
 public:
-  explicit AltairXDAGToDAGISel(char &ID, AltairXTargetMachine &TM,
-                               CodeGenOpt::Level OL)
-      : SelectionDAGISel(ID, TM, OL), Subtarget(nullptr) {}
-
-  // Pass Name
-  StringRef getPassName() const override {
-    return "AltairX DAG->DAG Pattern Instruction Selection";
-  }
+  explicit AltairXDAGToDAGISel(AltairXTargetMachine &TM, CodeGenOptLevel OL)
+      : SelectionDAGISel(TM, OL), Subtarget(nullptr) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 

@@ -70,7 +70,7 @@ public:
                                const MCSubtargetInfo &Subtarget,
                                const MCRegisterInfo &RegInfo,
                                const MCTargetOptions &TargetOptions)
-      : MCAsmBackend{support::endianness::little}, Target{T}, STI{Subtarget},
+      : MCAsmBackend{endianness::little}, Target{T}, STI{Subtarget},
         MRI{RegInfo}, Options{TargetOptions} {}
 
   std::unique_ptr<MCObjectTargetWriter>
@@ -93,9 +93,8 @@ public:
                   const MCSubtargetInfo *STI) const override;
 
   // Target Relaxation Interfaces
-  bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
-                            const MCRelaxableFragment *DF,
-                            const MCAsmLayout &Layout) const override;
+  bool mayNeedRelaxation(const MCInst &Inst,
+                         const MCSubtargetInfo &STI) const override;
 
 private:
   const Target &Target;
