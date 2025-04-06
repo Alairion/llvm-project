@@ -76,7 +76,63 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
 
-  setOperationAction(ISD::FNEG, AllFloatsMVT, LegalizeAction::Expand);
+  // Constants
+  setOperationAction(ISD::Constant, AllIntsMVT, LegalizeAction::Legal);
+  // AXIMPR: This is the default, but could be improved with isFPImmLegal
+  setOperationAction(ISD::ConstantFP, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::GlobalAddress, MVT::i64, LegalizeAction::Custom);
+  //setOperationAction(ISD::GlobalTLSAddress, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::FrameIndex, MVT::i64, LegalizeAction::Expand);
+  setOperationAction(ISD::JumpTable, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::ConstantPool, AllMVT, LegalizeAction::Custom);
+  //setOperationAction(ISD::ExternalSymbol, MVT::i64, LegalizeAction::Custom);
+  setOperationAction(ISD::BlockAddress, MVT::i64, LegalizeAction::Custom);
+  //setOperationAction(PtrAuthGlobalAddress, MVT::i64, LegalizeAction::Custom);
+  //setOperationAction(GLOBAL_OFFSET_TABLE, MVT::i64, LegalizeAction::Custom);
+  //setOperationAction(FRAMEADDR, MVT::i64, LegalizeAction::Custom);
+  //setOperationAction(RETURNADDR, MVT::i64, LegalizeAction::Custom);
+  //setOperationAction(ADDROFRETURNADDR, MVT::i64, LegalizeAction::Custom);
+
+  // AXIMPR: This can be matched, but they are hard to generate from high level code
+  setOperationAction(ISD::SMUL_LOHI, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::UMUL_LOHI, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::SDIVREM, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::UDIVREM, AllIntsMVT, LegalizeAction::Expand);
+
+  setOperationAction(ISD::FREM, AllFloatsMVT, LegalizeAction::Expand);
+
+  setOperationAction(ISD::FPTRUNC_ROUND, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::FMA, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::FMAD, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::FCOPYSIGN, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::FGETSIGN, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::FCANONICALIZE, AllFloatsMVT, LegalizeAction::Expand);
+
+  // AXIMPR: vector support to do
+  // BUILD_VECTOR, INSERT_VECTOR_ELT, EXTRACT_VECTOR_ELT, CONCAT_VECTORS
+  // INSERT_SUBVECTOR, EXTRACT_SUBVECTOR, VECTOR_DEINTERLEAVE, VECTOR_INTERLEAVE, VECTOR_REVERSE
+  // VECTOR_SHUFFLE, VECTOR_SPLICE, SCALAR_TO_VECTOR, SPLAT_VECTOR, SPLAT_VECTOR_PARTS, STEP_VECTOR, VECTOR_COMPRESS
+
+  setOperationAction(ISD::BSWAP, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::CTTZ, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::CTLZ, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::CTPOP, AllIntsMVT, LegalizeAction::Expand);
+
+  setOperationAction(ISD::SELECT, AllMVT, LegalizeAction::Custom);
+  //setOperationAction(ISD::VSELECT, AllMVT, LegalizeAction::Custom);
+  setOperationAction(ISD::SELECT_CC, AllMVT, LegalizeAction::Custom);
+  setOperationAction(ISD::SETCC, AllMVT, LegalizeAction::Custom);
+
+  // Let LLVM handle NaN related stuff
+  setCondCodeAction({ISD::CondCode::SETO, ISD::CondCode::SETUO,
+                     ISD::CondCode::SETUEQ, ISD::CondCode::SETUGT,
+                     ISD::CondCode::SETUGE, ISD::CondCode::SETULT,
+                     ISD::CondCode::SETULE, ISD::CondCode::SETUNE},
+                    AllFloatsMVT, LegalizeAction::Expand);
+
+  setOperationAction(ISD::SHL_PARTS, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::SRA_PARTS, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::SRL_PARTS, AllIntsMVT, LegalizeAction::Expand);
 
   setOperationAction(ISD::FP_TO_SINT, SmallIntsMVT, LegalizeAction::Promote);
   setOperationAction(ISD::SINT_TO_FP, SmallIntsMVT, LegalizeAction::Promote);
@@ -87,35 +143,29 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FP_TO_UINT, MVT::i64, LegalizeAction::Expand);
   setOperationAction(ISD::UINT_TO_FP, MVT::i64, LegalizeAction::Expand);
 
-  setOperationAction(ISD::FrameIndex, MVT::i64, LegalizeAction::Expand);
-  setOperationAction(ISD::GlobalAddress, MVT::i64, LegalizeAction::Custom);
-  setOperationAction(ISD::BlockAddress, MVT::i64, LegalizeAction::Custom);
-  setOperationAction(ISD::ConstantPool, AllMVT, LegalizeAction::Custom);
-  setOperationAction(ISD::Constant, AllIntsMVT, LegalizeAction::Legal);
-  setOperationAction(ISD::ConstantFP, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::GET_ROUNDING, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::SET_ROUNDING, AllFloatsMVT, LegalizeAction::Expand);
+
+  setOperationAction(ISD::FCOS, AllFloatsMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::FPOW, AllFloatsMVT, LegalizeAction::Expand);
 
   setOperationAction(ISD::DYNAMIC_STACKALLOC, AllIntsMVT, Expand);
   setOperationAction({ISD::STACKSAVE, ISD::STACKRESTORE}, MVT::Other, Expand);
 
   setOperationAction(ISD::BR_CC, AllMVT, LegalizeAction::Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, LegalizeAction::Expand);
-  setOperationAction(ISD::JumpTable, MVT::i64, LegalizeAction::Custom);
   setOperationAction(ISD::BRCOND, MVT::Other, LegalizeAction::Custom);
   setOperationAction(ISD::BRIND, MVT::Other, LegalizeAction::Custom);
-  setOperationAction(ISD::SETCC, AllMVT, LegalizeAction::Custom);
-  setOperationAction(ISD::SELECT, AllMVT, LegalizeAction::Custom);
-  setOperationAction(ISD::SELECT_CC, AllMVT, LegalizeAction::Custom);
 
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
-  //setOperationAction(ISD::VAARG, AllMVT, Promote);
   setOperationAction(ISD::VAARG, MVT::Other, Expand);
   setOperationAction(ISD::VACOPY, MVT::Other, Expand);
 
-  // Set minimum and preferred function alignment, and loop alignment (log2)
-  setMinFunctionAlignment(Align{1});
-  setPrefFunctionAlignment(Align{1});
-  setPrefLoopAlignment(Align{1});
+  // Set minimum and preferred function alignment, and loop alignment
+  setMinFunctionAlignment(Align{4});
+  setPrefFunctionAlignment(Align{8});
+  setPrefLoopAlignment(Align{4});
 }
 
 SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
@@ -877,13 +927,17 @@ SDValue AltairXTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   const ISD::CondCode cc = cast<CondCodeSDNode>(Op.getOperand(2))->get();
   SDLoc dl{Op};
 
-  // seteq(and(i, j), j) -> sbit(i, j)
-  // seteq(i, and(i, j)) -> sbit(i, j)
-  if (auto node{MatchesSBit(DAG, dl, left, right, cc)}; node) {
-    return *node;
-  }
-  if (auto node{MatchesSBit(DAG, dl, right, left, cc)}; node) {
-    return *node;
+  const auto type = left.getSimpleValueType();
+  if(type.isInteger())
+  {
+    // seteq(and(i, j), j) -> sbit(i, j)
+    // seteq(i, and(i, j)) -> sbit(i, j)
+    if (auto node{MatchesSBit(DAG, dl, left, right, cc)}; node) {
+      return *node;
+    }
+    if (auto node{MatchesSBit(DAG, dl, right, left, cc)}; node) {
+      return *node;
+    }
   }
 
   // generic case
