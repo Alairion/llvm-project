@@ -59,6 +59,8 @@ bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
     return llvm::isInt<9>(imm);
   case AltairX::InstFormatALURegRegImm9:
     return llvm::isInt<9>(imm);
+  case AltairX::InstFormatMDURegImm9:
+    return llvm::isInt<9>(imm);
   case AltairX::InstFormatLSURegImm10:
     return llvm::isInt<10>(imm);
   case AltairX::InstFormatFPURegImm16:
@@ -73,7 +75,8 @@ bool fitsImm(const MachineInstr &inst, std::int64_t imm) {
   case AltairX::InstFormatCMPRegImm9:
     return llvm::isInt<9>(imm);
   default:
-    llvm_unreachable("Unknown instruction type!");
+    LLVM_DEBUG(dbgs() << "Inst: " << inst);
+    llvm_unreachable("Unknown or non-imm instruction type!");
   }
 }
 
@@ -88,14 +91,16 @@ std::uint32_t immOperandIndex(const MachineInstr &inst) {
     return 2;
   case AltairX::InstFormatALURegRegImm9:
     return 3;
+  case AltairX::InstFormatMDURegImm9:
+    return 1;
   case AltairX::InstFormatLSURegImm10:
     return 2;
   case AltairX::InstFormatFPURegImm16:
     llvm_unreachable("todo: impl-fpu");
   case AltairX::InstFormatBRURelImm23:
-    return noImm; // assume always in range (add option?)
+    return noImm; // assume always in range (AXIMPR: add option)
   case AltairX::InstFormatBRURelImm24:
-    return noImm; // assume always in range (add option?)
+    return noImm; // assume always in range (AXIMPR: add option)
   case AltairX::InstFormatBRUAbsImm24:
     return 0;
   case AltairX::InstFormatCMPRegImm9:
@@ -113,6 +118,8 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
     return AltairX::MOVEIX9;
   case AltairX::InstFormatALURegRegImm9:
     return AltairX::MOVEIX9;
+  case AltairX::InstFormatMDURegImm9:
+    return AltairX::MOVEIX9;
   case AltairX::InstFormatLSURegImm10:
     return AltairX::MOVEIX10;
   case AltairX::InstFormatFPURegImm16:
@@ -126,7 +133,8 @@ std::uint32_t getMoveIX(const MachineInstr &inst) {
   case AltairX::InstFormatCMPRegImm9:
     return AltairX::MOVEIX9;
   default:
-    llvm_unreachable("Unknown instruction type!");
+    LLVM_DEBUG(dbgs() << "Inst: " << inst);
+    llvm_unreachable("Unknown or non-imm instruction type!");
   }
 }
 
@@ -165,7 +173,7 @@ void AltairXMoveIXFiller::runOnMachineBasicBlock(MachineBasicBlock &block) {
     } else if (op.isSymbol()) {
       moveix = makeBuilder().addExternalSymbol(op.getSymbolName()).getInstr();
     } else {
-      LLVM_DEBUG(it->dump());
+      LLVM_DEBUG(dbgs() << "Inst: " << *it);
       llvm_unreachable("Unsupported immediate type!");
     }
 

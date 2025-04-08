@@ -100,6 +100,22 @@ struct BRCOperands {
 
 BRCOperands analysePseudoBRC(ISD::CondCode value) {
   switch (value) {
+  case ISD::SETOEQ:
+    return {AltairX::BRCondCode::EQ, false};
+  case ISD::SETOGT:
+    return {AltairX::BRCondCode::LT, true};
+  case ISD::SETOGE:
+    return {AltairX::BRCondCode::GE, false};
+  case ISD::SETOLT:
+    return {AltairX::BRCondCode::LT, false};
+  case ISD::SETOLE:
+    return {AltairX::BRCondCode::GE, true};
+  case ISD::SETONE:
+    return {AltairX::BRCondCode::NE, false};
+  case ISD::SETO: // AXIMPR: support NaN properly
+    return {AltairX::BRCondCode::EQ, false};
+  case ISD::SETUO: // AXIMPR: support NaN properly
+    return {AltairX::BRCondCode::NE, false};
   case ISD::SETUEQ:
     return {AltairX::BRCondCode::EQ, false};
   case ISD::SETUGT:

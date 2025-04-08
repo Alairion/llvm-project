@@ -672,9 +672,17 @@ bool AltairXInstrInfo::reverseBranchCondition(
   assert(Cond[0].getParent()->getOpcode() == AltairX::PseudoBRC &&
          "AltairXInstrInfo::reverseBranchCondition only works with PseudoBRC!");
 
+  // AXIMPR: support NaN, also here we can probably do something more robust
   const auto cc = static_cast<ISD::CondCode>(Cond[0].getImm());
-  const auto inversed = ISD::getSetCCInverse(cc, MVT::i64); // any int type
-  Cond[0].setImm(static_cast<int64_t>(inversed));
+  // These two condcodes are only valid for floats
+  if (cc == ISD::CondCode::SETO || cc == ISD::CondCode::SETUO) {
+    Cond[0].setImm(static_cast<int64_t>(
+        ISD::getSetCCInverse(cc, MVT::f64))); // any float type
+  } else {
+    Cond[0].setImm(static_cast<int64_t>(
+        ISD::getSetCCInverse(cc, MVT::i64))); // any int type
+  }
+
   return false;
 }
 

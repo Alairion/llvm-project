@@ -129,6 +129,8 @@ MCFixupKind AltairXMCCodeEmitter::getImmFixupFor(const MCInst &MI) const {
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9lo);
   case AltairX::InstFormatALURegRegImm9:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9lo);
+  case AltairX::InstFormatMDURegImm9:
+    return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix9lo);
   case AltairX::InstFormatLSURegImm10:
     return static_cast<MCFixupKind>(AltairX::fixup_altairx_moveix10lo);
   case AltairX::InstFormatMoveImm18:

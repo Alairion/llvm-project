@@ -45,7 +45,6 @@ std::string computeDataLayout() {
 
 Reloc::Model getEffectiveRelocModel(std::optional<CodeModel::Model> CM,
                                            std::optional<Reloc::Model> RM) {
-
   if (!RM) {
     return Reloc::Static;
   }

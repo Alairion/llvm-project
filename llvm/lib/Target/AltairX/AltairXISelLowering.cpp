@@ -42,12 +42,10 @@ static constexpr std::array<llvm::MVT, 3> SmallIntsMVT = {MVT::i8, MVT::i16,
                                                           MVT::i32};
 static constexpr std::array<llvm::MVT, 4> AllIntsMVT = {MVT::i8, MVT::i16,
                                                         MVT::i32, MVT::i64};
-static constexpr std::array<llvm::MVT, 4> AllFloatsMVT = {MVT::f16, MVT::f32,
-                                                          MVT::f64, MVT::f128};
+static constexpr std::array<llvm::MVT, 2> AllFloatsMVT = {MVT::f32, MVT::f64};
 
-static constexpr std::array<llvm::MVT, 8> AllMVT = {
-    MVT::i8,  MVT::i16, MVT::i32, MVT::i64,
-    MVT::f16, MVT::f32, MVT::f64, MVT::f128};
+static constexpr std::array<llvm::MVT, 6> AllMVT = {
+    MVT::i8, MVT::i16, MVT::i32, MVT::i64, MVT::f32, MVT::f64};
 
 static constexpr std::array<MCPhysReg, 8> GPRArgRegs = {
     AltairX::R1, AltairX::R2, AltairX::R3, AltairX::R4,
@@ -64,9 +62,6 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   addRegisterClass(MVT::i64, &AltairX::GPIReg64RegClass);
   addRegisterClass(MVT::f32, &AltairX::FReg32RegClass);
   addRegisterClass(MVT::f64, &AltairX::FReg64RegClass);
-
-  // Must, computeRegisterProperties - Once all of the register classes are
-  // added, this allows us to compute derived properties we expose.
   computeRegisterProperties(Subtarget.getRegisterInfo());
 
   setStackPointerRegisterToSaveRestore(AltairX::R0);
@@ -122,14 +117,7 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   //setOperationAction(ISD::VSELECT, AllMVT, LegalizeAction::Custom);
   setOperationAction(ISD::SELECT_CC, AllMVT, LegalizeAction::Custom);
   setOperationAction(ISD::SETCC, AllMVT, LegalizeAction::Custom);
-
-  // Let LLVM handle NaN related stuff
-  setCondCodeAction({ISD::CondCode::SETO, ISD::CondCode::SETUO,
-                     ISD::CondCode::SETUEQ, ISD::CondCode::SETUGT,
-                     ISD::CondCode::SETUGE, ISD::CondCode::SETULT,
-                     ISD::CondCode::SETULE, ISD::CondCode::SETUNE},
-                    AllFloatsMVT, LegalizeAction::Expand);
-
+  
   setOperationAction(ISD::SHL_PARTS, AllIntsMVT, LegalizeAction::Expand);
   setOperationAction(ISD::SRA_PARTS, AllIntsMVT, LegalizeAction::Expand);
   setOperationAction(ISD::SRL_PARTS, AllIntsMVT, LegalizeAction::Expand);
@@ -154,7 +142,7 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::BR_CC, AllMVT, LegalizeAction::Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, LegalizeAction::Expand);
-  setOperationAction(ISD::BRCOND, MVT::Other, LegalizeAction::Custom);
+  setOperationAction(ISD::BRCOND, MVT::Other, LegalizeAction::Expand);
   setOperationAction(ISD::BRIND, MVT::Other, LegalizeAction::Custom);
 
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
@@ -164,7 +152,7 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
 
   // Set minimum and preferred function alignment, and loop alignment
   setMinFunctionAlignment(Align{4});
-  setPrefFunctionAlignment(Align{8});
+  setPrefFunctionAlignment(Align{4});
   setPrefLoopAlignment(Align{4});
 }
 
@@ -196,8 +184,6 @@ SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
     return LowerSELECT_CC(Op, DAG);
   case ISD::SETCC:
     return LowerSETCC(Op, DAG);
-  case ISD::BRCOND:
-    return LowerBRCOND(Op, DAG);
   case ISD::BR_CC:
     return LowerBR_CC(Op, DAG);
   case ISD::BRIND:
@@ -861,51 +847,56 @@ std::optional<SDValue> MatchesSBit(SelectionDAG &DAG, SDLoc dl,
 struct SETCCOperands {
   SDValue &left;
   SDValue &right;
-  ISD::CondCode cc{};
+  AltairX::SCMPCondCode cc{};
   bool needFlip{}; // true if "xor 1" must be added
 };
 
 std::optional<SETCCOperands> computeSETCCOperands(SDValue &Left, SDValue &Right,
                                                   ISD::CondCode CC) {
+  // AXIMPR: support NaN
+  const auto ltu_value = Left.getSimpleValueType().isFloatingPoint()
+                             ? AltairX::SCMPCondCode::LT
+                             : AltairX::SCMPCondCode::LTU;
+
   switch (CC) {
   // Natively supported cases, this will be matched by tablegen patterns as-is
-  case ISD::SETOEQ:
-    [[fallthrough]]; // equal
+  case ISD::SETOEQ: // equal
+    [[fallthrough]];
   case ISD::SETUEQ:
     [[fallthrough]];
   case ISD::SETEQ:
+    return SETCCOperands{Left, Right, AltairX::SCMPCondCode::EQ, false};
+  case ISD::SETONE: // not equal
     [[fallthrough]];
-  case ISD::SETONE:
-    [[fallthrough]]; // not equal
   case ISD::SETUNE:
     [[fallthrough]];
   case ISD::SETNE:
+    return SETCCOperands{Left, Right, AltairX::SCMPCondCode::NE, false};
+  case ISD::SETOLT: // less than
     [[fallthrough]];
-  case ISD::SETOLT:
-    [[fallthrough]]; // less than
   case ISD::SETULT:
     [[fallthrough]];
   case ISD::SETLT:
-    return std::nullopt;
+    return SETCCOperands{Left, Right, AltairX::SCMPCondCode::LT, false};
   // Cases that need at least one modification
   case ISD::SETOGT: // ordered >
-    return SETCCOperands{Right, Left, ISD::CondCode::SETOLT, false};
+    return SETCCOperands{Right, Left, AltairX::SCMPCondCode::LT, false};
   case ISD::SETOGE: // ordered >=
-    return SETCCOperands{Left, Right, ISD::CondCode::SETOLT, true};
+    return SETCCOperands{Left, Right, AltairX::SCMPCondCode::LT, true};
   case ISD::SETOLE: // ordered <=
-    return SETCCOperands{Right, Left, ISD::CondCode::SETOLT, true};
+    return SETCCOperands{Right, Left, AltairX::SCMPCondCode::LT, true};
   case ISD::SETUGT: // unsigned >
-    return SETCCOperands{Right, Left, ISD::CondCode::SETULT, false};
+    return SETCCOperands{Right, Left, ltu_value, false};
   case ISD::SETUGE: // unsigned >=
-    return SETCCOperands{Left, Right, ISD::CondCode::SETULT, true};
+    return SETCCOperands{Left, Right, ltu_value, true};
   case ISD::SETULE: // unsigned <=
-    return SETCCOperands{Right, Left, ISD::CondCode::SETULT, true};
+    return SETCCOperands{Right, Left, ltu_value, true};
   case ISD::SETGT: // signed >
-    return SETCCOperands{Right, Left, ISD::CondCode::SETLT, false};
+    return SETCCOperands{Right, Left, AltairX::SCMPCondCode::LT, false};
   case ISD::SETGE: // signed >=
-    return SETCCOperands{Left, Right, ISD::CondCode::SETLT, true};
+    return SETCCOperands{Left, Right, AltairX::SCMPCondCode::LT, true};
   case ISD::SETLE: // signed <=
-    return SETCCOperands{Right, Left, ISD::CondCode::SETLT, true};
+    return SETCCOperands{Right, Left, AltairX::SCMPCondCode::LT, true};
   default:
     llvm_unreachable("Unsupported ISD::CondCode");
     break;
@@ -929,8 +920,7 @@ SDValue AltairXTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   SDLoc dl{Op};
 
   const auto type = left.getSimpleValueType();
-  if(type.isInteger())
-  {
+  if (type.isInteger()) {
     // seteq(and(i, j), j) -> sbit(i, j)
     // seteq(i, and(i, j)) -> sbit(i, j)
     if (auto node{MatchesSBit(DAG, dl, left, right, cc)}; node) {
@@ -949,15 +939,23 @@ SDValue AltairXTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
 
   // left must not be constant!
   SDValue realLeft = promoteConstant(DAG, dl, operands->left);
-  SDValue newOp =
-      DAG.getSetCC(dl, MVT::i8, realLeft, operands->right, operands->cc);
+  SDValue ccval =
+    DAG.getConstant(static_cast<uint64_t>(operands->cc), dl, MVT::i32);
+  SDValue scmp;
+  if (type.isFloatingPoint()) {
+    scmp = DAG.getNode(AltairXISD::FSCMP, dl, MVT::i8, realLeft,
+                       operands->right, ccval);
+  } else {
+    scmp = DAG.getNode(AltairXISD::SCMP, dl, MVT::i8, realLeft, operands->right,
+                       ccval);
+  }
+
   if (operands->needFlip) {
-    // inverse result using xor
-    return DAG.getNode(ISD::XOR, dl, MVT::i8, newOp,
+    return DAG.getNode(ISD::XOR, dl, MVT::i8, scmp,
                        DAG.getConstant(1, dl, MVT::i8));
   }
 
-  return newOp;
+  return scmp;
 }
 
 namespace {
@@ -965,7 +963,7 @@ namespace {
 struct SelectSetCCOperands {
   SDValue &left;
   SDValue &right;
-  ISD::CondCode cc{};
+  AltairX::SCMPCondCode cc{};
 };
 
 struct SelectCMoveOperands {
@@ -981,6 +979,11 @@ struct SelectCCOperands {
 SelectCCOperands computeSelectCCOperands(SDValue &Left, SDValue &Right,
                                          SDValue &TVal, SDValue &FVal,
                                          ISD::CondCode CC) {
+  // AXIMPR: support NaN
+  const auto ltu_value = Left.getSimpleValueType().isFloatingPoint()
+                             ? AltairX::SCMPCondCode::LT
+                             : AltairX::SCMPCondCode::LTU;
+
   // cmove(f, t, cond): f = t if (cond != 0)
 
   // left != right ? t : f:
@@ -1009,43 +1012,43 @@ SelectCCOperands computeSelectCCOperands(SDValue &Left, SDValue &Right,
 
   switch (CC) {
   // Natively supported cases, this will be matched by tablegen patterns as-is
-  case ISD::SETOEQ:
-    [[fallthrough]]; // equal
+  case ISD::SETOEQ: // equal
+    [[fallthrough]];
   case ISD::SETUEQ:
     [[fallthrough]];
   case ISD::SETEQ:
+    return {{Left, Right, AltairX::SCMPCondCode::EQ}, {TVal, FVal}};
+  case ISD::SETONE: // not equal
     [[fallthrough]];
-  case ISD::SETONE:
-    [[fallthrough]]; // not equal
   case ISD::SETUNE:
     [[fallthrough]];
   case ISD::SETNE:
+    return {{Left, Right, AltairX::SCMPCondCode::NE}, {TVal, FVal}};
+  case ISD::SETOLT: // less than
     [[fallthrough]];
-  case ISD::SETOLT:
-    [[fallthrough]]; // less than
   case ISD::SETULT:
     [[fallthrough]];
   case ISD::SETLT:
-    return {{Left, Right, CC}, {TVal, FVal}};
+    return {{Left, Right, AltairX::SCMPCondCode::LT}, {TVal, FVal}};
   // Cases that need at least one modification
   case ISD::SETOGT: // ordered >
-    return {{Right, Left, ISD::CondCode::SETOLT}, {TVal, FVal}};
+    return {{Right, Left, AltairX::SCMPCondCode::LT}, {TVal, FVal}};
   case ISD::SETOGE: // ordered >=
-    return {{Left, Right, ISD::CondCode::SETOLT}, {FVal, TVal}};
+    return {{Left, Right, AltairX::SCMPCondCode::LT}, {FVal, TVal}};
   case ISD::SETOLE: // ordered <=
-    return {{Right, Left, ISD::CondCode::SETOLT}, {FVal, TVal}};
+    return {{Right, Left, AltairX::SCMPCondCode::LT}, {FVal, TVal}};
   case ISD::SETUGT: // unsigned >
-    return {{Right, Left, ISD::CondCode::SETULT}, {TVal, FVal}};
+    return {{Right, Left, ltu_value}, {TVal, FVal}};
   case ISD::SETUGE: // unsigned >=
-    return {{Left, Right, ISD::CondCode::SETULT}, {FVal, TVal}};
+    return {{Left, Right, ltu_value}, {FVal, TVal}};
   case ISD::SETULE: // unsigned <=
-    return {{Right, Left, ISD::CondCode::SETULT}, {FVal, TVal}};
+    return {{Right, Left, ltu_value}, {FVal, TVal}};
   case ISD::SETGT: // signed >
-    return {{Right, Left, ISD::CondCode::SETLT}, {TVal, FVal}};
+    return {{Right, Left, AltairX::SCMPCondCode::LT}, {TVal, FVal}};
   case ISD::SETGE: // signed >=
-    return {{Left, Right, ISD::CondCode::SETLT}, {FVal, TVal}};
+    return {{Left, Right, AltairX::SCMPCondCode::LT}, {FVal, TVal}};
   case ISD::SETLE: // signed <=
-    return {{Right, Left, ISD::CondCode::SETLT}, {FVal, TVal}};
+    return {{Right, Left, AltairX::SCMPCondCode::LT}, {FVal, TVal}};
   default:
     llvm_unreachable("Unsupported ISD::CondCode");
     break;
@@ -1062,28 +1065,25 @@ SDValue AltairXTargetLowering::LowerSELECT(SDValue Op,
   SDValue fval = Op.getOperand(2);
 
   const auto type = tval.getValueType();
-
   // left must not be constant!
   SDValue realLeft = promoteConstant(DAG, dl, fval);
 
   if (type.isFloatingPoint()) {
-    return DAG.getNode(AltairXISD::FCMOVE, dl, Op.getValueType(), fval, cond,
-                       tval);
+    return DAG.getNode(AltairXISD::FCMOVE, dl, type, realLeft, cond, tval);
   }
 
-  return DAG.getNode(AltairXISD::CMOVE, dl, Op.getValueType(), fval, cond,
-                     tval);
+  return DAG.getNode(AltairXISD::CMOVE, dl, type, realLeft, cond, tval);
 }
 
 SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
                                               SelectionDAG &DAG) const {
-  SDLoc dl{Op};
   SDValue left = Op.getOperand(0);
   SDValue right = Op.getOperand(1);
   SDValue tval = Op.getOperand(2);
   SDValue fval = Op.getOperand(3);
   const ISD::CondCode cc = cast<CondCodeSDNode>(Op.getOperand(4))->get();
 
+  SDLoc dl{Op};
   const auto type = right.getValueType();
 
   auto [setccOps, cmoveOps] =
@@ -1091,93 +1091,42 @@ SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
 
   // left must not be constant!
   SDValue realLeft = promoteConstant(DAG, dl, setccOps.left);
-  SDValue setcc =
-      DAG.getSetCC(dl, MVT::i8, realLeft, setccOps.right, setccOps.cc);
+  SDValue ccval =
+      DAG.getConstant(static_cast<uint64_t>(setccOps.cc), dl, MVT::i32);
 
   if (type.isFloatingPoint()) {
+    SDValue setcc = DAG.getNode(AltairXISD::FSCMP, dl, MVT::i8, realLeft,
+                                setccOps.right, ccval);
     return DAG.getNode(AltairXISD::FCMOVE, dl, Op.getValueType(),
                        cmoveOps.falseVal, setcc, cmoveOps.trueVal);
   }
 
+  SDValue setcc = DAG.getNode(AltairXISD::SCMP, dl, MVT::i8, realLeft,
+                              setccOps.right, ccval);
   return DAG.getNode(AltairXISD::CMOVE, dl, Op.getValueType(),
                      cmoveOps.falseVal, setcc, cmoveOps.trueVal);
 }
 
-namespace {
-
-AltairX::BRCondCode toAltairXBRCondCode(ISD::CondCode value) {
-  switch (value) {
-  case ISD::SETOEQ:
-    return AltairX::BRCondCode::EQ;
-  case ISD::SETOGE:
-    return AltairX::BRCondCode::GEU;
-  case ISD::SETOLT:
-    return AltairX::BRCondCode::LTU;
-  case ISD::SETONE:
-    return AltairX::BRCondCode::NE;
-  case ISD::SETUEQ:
-    return AltairX::BRCondCode::EQ;
-  case ISD::SETUGE:
-    return AltairX::BRCondCode::GEU;
-  case ISD::SETULT:
-    return AltairX::BRCondCode::LTU;
-  case ISD::SETUNE:
-    return AltairX::BRCondCode::NE;
-  case ISD::SETEQ:
-    return AltairX::BRCondCode::EQ;
-  case ISD::SETGE:
-    return AltairX::BRCondCode::GE;
-  case ISD::SETLT:
-    return AltairX::BRCondCode::LT;
-  case ISD::SETNE:
-    return AltairX::BRCondCode::NE;
-  default:
-    llvm_unreachable("Unsupported ISD::CondCode."
-                     "AltairX only supports ==, !=, < and >= predicates.");
-    break;
-  }
-}
-
-} // namespace
-
-SDValue AltairXTargetLowering::LowerBRCOND(SDValue Op,
-                                           SelectionDAG &DAG) const {
-  SDValue chain = Op.getOperand(0);
-  SDValue cond = Op.getOperand(1);
-  SDValue dest = Op.getOperand(2);
-
-  if (cond->getOpcode() != ISD::SETCC) {
-    llvm_unreachable("Unsupported BRCOND conditional operand");
-  }
-
-  const auto cc = cast<CondCodeSDNode>(cond->getOperand(2))->get();
-
-  SDLoc dl{cond};
-  SDValue ccval = DAG.getConstant(static_cast<uint64_t>(cc), dl, MVT::i32);
-  return DAG.getNode(AltairXISD::BRCOND, dl, MVT::Other, chain, dest, ccval,
-                     cond);
-}
-
 SDValue AltairXTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   SDValue chain = Op.getOperand(0);
-  const auto cc = cast<CondCodeSDNode>(Op.getOperand(1))->get();
+  const ISD::CondCode cc = cast<CondCodeSDNode>(Op.getOperand(1))->get();
   SDValue left = Op.getOperand(2);
   SDValue right = Op.getOperand(3);
   SDValue dest = Op.getOperand(4);
 
+  SDLoc dl{Op};
   const auto type = right.getValueType();
 
-  SDLoc dl{Op};
-  SDValue realRight = promoteConstant(DAG, dl, right);
-
-  SDValue cmp{};
+  SDValue cmp;
   if (type.isFloatingPoint()) {
-    cmp = DAG.getNode(AltairXISD::FCMP, dl, type, left, realRight);
+    cmp = DAG.getNode(AltairXISD::FCMP, dl, type, left, right);
   } else {
-    cmp = DAG.getNode(AltairXISD::CMP, dl, type, left, realRight);
+    cmp = DAG.getNode(AltairXISD::CMP, dl, type, left, right);
   }
 
-  SDValue ccval = DAG.getConstant(static_cast<uint64_t>(cc), dl, MVT::i32);
+  // BRCOND becomes PseudoBRC that supports all predicates
+  // It is expanded by AltairXBranchPatcher pass
+  auto ccval = DAG.getConstant(cc, dl, MVT::i32);
   return DAG.getNode(AltairXISD::BRCOND, dl, MVT::Other, chain, dest, ccval,
                      cmp);
 }
