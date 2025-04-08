@@ -141,9 +141,3 @@ void AltairXInstPrinter::printBRCPrediction(const MCInst *MI, uint32_t OpIdx,
   const auto value = MI->getOperand(OpIdx).getImm();
   OS << (value ? 't' : 'f');
 }
-
-void AltairXInstPrinter::printSCMPCondCode(const MCInst *MI, uint32_t OpIdx,
-                                           raw_ostream &OS) {
-  const auto cc = MI->getOperand(OpIdx).getImm();
-  OS << SCMPCondCodeToString(static_cast<AltairX::SCMPCondCode>(cc));
-}

@@ -19,15 +19,16 @@ def InstFormatRegReg : InstFormat<2>; // two inputs, single output (ALU, LSU, MD
 def InstFormatRegRegReg : InstFormat<3>; // three inputs, single output (cmove)
 def InstFormatUnary : InstFormat<4>; // single input, single output (FPU)
 def InstFormatALURegImm9 : InstFormat<5>;
-def InstFormatALURegRegImm9 : InstFormat<3>; // used by conditional moves
-def InstFormatLSURegImm10 : InstFormat<7>;
-def InstFormatFPURegImm16 : InstFormat<8>;
-def InstFormatBRURelImm23 : InstFormat<9>;
-def InstFormatBRURelImm24 : InstFormat<10>;
-def InstFormatBRUAbsImm24 : InstFormat<11>;
-def InstFormatBRUIndirect : InstFormat<12>;
-def InstFormatCMPRegReg : InstFormat<13>; // cmp has a specific format
-def InstFormatCMPRegImm9 : InstFormat<14>;
+def InstFormatALURegRegImm9 : InstFormat<6>; // used by conditional moves
+def InstFormatMDURegImm9 : InstFormat<7>;
+def InstFormatLSURegImm10 : InstFormat<8>;
+def InstFormatFPURegImm16 : InstFormat<9>;
+def InstFormatBRURelImm23 : InstFormat<10>;
+def InstFormatBRURelImm24 : InstFormat<11>;
+def InstFormatBRUAbsImm24 : InstFormat<12>;
+def InstFormatBRUIndirect : InstFormat<13>;
+def InstFormatCMPRegReg : InstFormat<14>; // cmp has a specific format
+def InstFormatCMPRegImm9 : InstFormat<15>;
 
 //===----------------------------------------------------------------------===//
 // Opcodes
@@ -155,12 +156,10 @@ def OPCODE_FSUB  : AltairXOpcodeFPU<0b1000>;
 def OPCODE_FMUL  : AltairXOpcodeFPU<0b0100>;
 def OPCODE_FNMUL : AltairXOpcodeFPU<0b1100>;
 
-def OPCODE_ITOF : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
-def OPCODE_FTOI : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
-def OPCODE_FTOD : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
-def OPCODE_DTOF : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
-def OPCODE_ITOD : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
-def OPCODE_DTOI : AltairXOpcodeFPU<0b0000>;  // TO DETERMINE !
+def OPCODE_FCMOVE : AltairXOpcodeFPU<0b0001>;
+def OPCODE_FSE    : AltairXOpcodeFPU<0b1001>;
+def OPCODE_FSEN   : AltairXOpcodeFPU<0b0101>;
+def OPCODE_FSLT   : AltairXOpcodeFPU<0b1101>;
 
 def OPCODE_FNEG : AltairXOpcodeFPU<0b0001>;
 def OPCODE_FABS : AltairXOpcodeFPU<0b1001>;
@@ -172,10 +171,13 @@ def OPCODE_FCMP   : AltairXOpcodeFPU<0b1011>;
 def OPCODE_FMOVEI : AltairXOpcodeFPU<0b0111>;
 def OPCODE_FCMPI  : AltairXOpcodeFPU<0b1111>;
 
-def OPCODE_FCMOVE : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
-def OPCODE_FSE    : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
-def OPCODE_FSEN   : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
-def OPCODE_FSLT   : AltairXOpcodeFPU<0b0000>; // TO DETERMINE !
+// with "11" as "size"
+def OPCODE_ITOF : AltairXOpcodeFPU<0b0100>; 
+def OPCODE_FTOI : AltairXOpcodeFPU<0b1100>;
+def OPCODE_FTOD : AltairXOpcodeFPU<0b0010>; 
+def OPCODE_DTOF : AltairXOpcodeFPU<0b1010>; 
+def OPCODE_ITOD : AltairXOpcodeFPU<0b0110>; 
+def OPCODE_DTOI : AltairXOpcodeFPU<0b1110>; 
 
 class AltairXOpcodeEFU<bits<4> val>
   : AltairXOpcode {
@@ -348,7 +350,7 @@ class AltairXInstMDURR<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, li
 }
 
 class AltairXInstMDURI<AltairXOpcode opcode, bits<2> size, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
-  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatALURegImm9> {
+  : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatMDURegImm9> {
   bits<6> rs1;
   bits<9> imm;
 

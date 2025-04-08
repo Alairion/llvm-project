@@ -299,7 +299,7 @@ def moveiximm : Operand<i64> {
 def MOVEIX23PCREL : AltairXInstMoveIX<InstFormatBRURelImm23, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX24PCREL : AltairXInstMoveIX<InstFormatBRURelImm24, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX24ABS : AltairXInstMoveIX<InstFormatBRUAbsImm24, (outs), (ins moveiximm:$imm), []>;
-// Also used for InstFormatCMPRegImm9 and InstFormatALURegRegImm9:
+// Also used for InstFormatMDURegImm9, InstFormatCMPRegImm9 and InstFormatALURegRegImm9:
 def MOVEIX9 : AltairXInstMoveIX<InstFormatALURegImm9, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX10 : AltairXInstMoveIX<InstFormatLSURegImm10, (outs), (ins moveiximm:$imm), []>;
 def MOVEIX18 : AltairXInstMoveIX<InstFormatMoveImm18, (outs), (ins moveiximm:$imm), []>;
@@ -443,8 +443,7 @@ def SetMDd : SetMDInst<MDUReg32, GPIReg32>;
 def SetMDq : SetMDInst<MDUReg64, GPIReg64>;
 
 //===----------------------------------------------------------------------===//
-// sext, zext and trunc
-// ADDS, SUBS
+// sext (ADDS, SUBS), zext and trunc
 //===----------------------------------------------------------------------===//
 
 // add/sub i[8,16,32,64] integers, then sext the result to i64
@@ -833,8 +832,7 @@ def FStoreRId : StoreRIInst<OPCODE_FSTI, FReg64, store, "fst", 2, "d">;
 
 // Pattern that should match this instruction
 //  and(setne(i, 0), setne(j, 0)) -> sand(i, j)
-// Imm version are useless in practice
-// compiler will generate a simplier code that can be matched using se or sen
+// Imm version are useless in practice, because it can be matched using se or sen
 class SANDInstRR<bits<2> size, string sizename, RegisterClass regclass>
   : AltairXInstALURR<OPCODE_SAND, size, // this technically returns a 1-bit int
     (outs GPIReg8:$rd),
@@ -854,39 +852,44 @@ def SAndRRq : SANDInstRR<3, "q", GPIReg64>;
 // - Less than (lt, ltu)
 // - Greater than predicate can be matched by swapping the compared values: (a > b) -> (b < a)
 // Greater or equal, less than or equal, need an additional xor or setne, this is done during ISelLowering
-class SCMPInstRR<AltairXOpcode opcode, string name, bits<2> size, string sizename,
-  SDPatternOperator setccop, RegisterClass regclass>
+// iX = AltairXISD::SCMP $rA, $rB, $pred
+def SDT_AltairXscmp : SDTypeProfile<1, 3, [SDTCisVT<0, i8>, SDTCisInt<1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i32>]>;
+def AltairXscmp : SDNode<"AltairXISD::SCMP", SDT_AltairXscmp, []>;
+
+class SCMPInstRR<AltairXOpcode opcode, string name, bits<2> size, string sizename, int pred,
+  RegisterClass regclass>
   : AltairXInstALURR<opcode, size,
     (outs GPIReg8:$rd),
     (ins regclass:$rs1, regclass:$rs2),
-    [(set GPIReg8:$rd, (setccop regclass:$rs1, regclass:$rs2))],
+    [(set GPIReg8:$rd, (AltairXscmp regclass:$rs1, regclass:$rs2, pred))],
     !strconcat(name, ".", sizename), "$rd, $rs1, $rs2"> {
 }
 
-class SCMPInstRI<AltairXOpcode opcode, string name, bits<2> size, string sizename,
-  SDPatternOperator setccop, RegisterClass regclass, Operand immop, ImmLeaf immpat>
+class SCMPInstRI<AltairXOpcode opcode, string name, bits<2> size, string sizename, int pred,
+ RegisterClass regclass, Operand immop, ImmLeaf immpat>
   : AltairXInstALURI<opcode, size,
     (outs GPIReg8:$rd),
     (ins regclass:$rs1, immop:$imm),
-    [(set GPIReg8:$rd, (setccop regclass:$rs1, immpat:$imm))],
+    [(set GPIReg8:$rd, (AltairXscmp regclass:$rs1, immpat:$imm, pred))],
     !strconcat(name, ".", sizename), "$rd, $rs1, $imm"> {
 }
 
-multiclass SCMPInst<AltairXOpcode opcode, string name, SDPatternOperator setccop> {
-  def RRb : SCMPInstRR<opcode, name, 0, "b", setccop, GPIReg8>;
-  def RRw : SCMPInstRR<opcode, name, 1, "w", setccop, GPIReg16>;
-  def RRd : SCMPInstRR<opcode, name, 2, "d", setccop, GPIReg32>;
-  def RRq : SCMPInstRR<opcode, name, 3, "q", setccop, GPIReg64>;
-  def RIb : SCMPInstRI<opcode, name, 0, "b", setccop, GPIReg8,  i8imm,  s8imm32>;
-  def RIw : SCMPInstRI<opcode, name, 1, "w", setccop, GPIReg16, i16imm, s16imm32>;
-  def RId : SCMPInstRI<opcode, name, 2, "d", setccop, GPIReg32, i32imm, s32imm32>;
-  def RIq : SCMPInstRI<opcode, name, 3, "q", setccop, GPIReg64, i64imm, s64imm32>;
+multiclass SCMPInst<AltairXOpcode opcode, string name, int pred> {
+  def RRb : SCMPInstRR<opcode, name, 0, "b", pred, GPIReg8>;
+  def RRw : SCMPInstRR<opcode, name, 1, "w", pred, GPIReg16>;
+  def RRd : SCMPInstRR<opcode, name, 2, "d", pred, GPIReg32>;
+  def RRq : SCMPInstRR<opcode, name, 3, "q", pred, GPIReg64>;
+  def RIb : SCMPInstRI<opcode, name, 0, "b", pred, GPIReg8,  i8imm,  s8imm32>;
+  def RIw : SCMPInstRI<opcode, name, 1, "w", pred, GPIReg16, i16imm, s16imm32>;
+  def RId : SCMPInstRI<opcode, name, 2, "d", pred, GPIReg32, i32imm, s32imm32>;
+  def RIq : SCMPInstRI<opcode, name, 3, "q", pred, GPIReg64, i64imm, s64imm32>;
 }
 
-defm Se   : SCMPInst<OPCODE_SE, "se", seteq>;
-defm Sen  : SCMPInst<OPCODE_SEN, "sen", setne>;
-defm Slts : SCMPInst<OPCODE_SLTS, "slts", setlt>;
-defm Sltu : SCMPInst<OPCODE_SLTU, "sltu", setult>;
+// see "enum class SCMPCondCode" for pred value
+defm Se   : SCMPInst<OPCODE_SE,   "se",   0>;
+defm Sen  : SCMPInst<OPCODE_SEN,  "sen",  1>;
+defm Slts : SCMPInst<OPCODE_SLTS, "slts", 2>;
+defm Sltu : SCMPInst<OPCODE_SLTU, "sltu", 3>;
 
 // iX = AltairXISD::SBIT $rA, $rB
 def SDT_AltairXsbit : SDTypeProfile<1, 2, [SDTCisInt<0>, SDTCisInt<1>, SDTCisSameAs<1, 2>]>;
@@ -1011,9 +1014,9 @@ def SDT_AltairXftoi : SDTypeProfile<1, 1, [SDTCisVT<0, f64>, SDTCisFP<1>]>;
 def AltairXftoi : SDNode<"AltairXISD::FTOI", SDT_AltairXftoi, []>;
 
 // Float conversions (extend, trunc, int <-> float)
-class FPUCastInst<string name, bits<2> size, AltairXOpcode opcode,
-  SDPatternOperator opnode, RegisterClass outclass, RegisterClass inclass>
-  : AltairXInstFPUUnary<opcode, size,
+class FPUCastInst<string name, AltairXOpcode opcode, SDPatternOperator opnode,
+  RegisterClass outclass, RegisterClass inclass>
+  : AltairXInstFPUUnary<opcode, 0b11,
     (outs outclass:$rd),
     (ins inclass:$rs1),
     [(set outclass:$rd, (opnode inclass:$rs1))],
@@ -1021,17 +1024,17 @@ class FPUCastInst<string name, bits<2> size, AltairXOpcode opcode,
 }
 
 // From int
-def IqToFs : FPUCastInst<"itof", 1, OPCODE_ITOF, AltairXitof, FReg32, FReg64>;
-def IqToFd : FPUCastInst<"itod", 2, OPCODE_ITOF, AltairXitof, FReg64, FReg64>;
+def IqToFs : FPUCastInst<"itof", OPCODE_ITOF, AltairXitof, FReg32, FReg64>;
+def IqToFd : FPUCastInst<"itod", OPCODE_ITOD, AltairXitof, FReg64, FReg64>;
 
 // To int
-def FsToIq : FPUCastInst<"ftoi", 1, OPCODE_FTOI, AltairXftoi, FReg64, FReg32>;
-def FdToIq : FPUCastInst<"dtoi", 2, OPCODE_FTOI, AltairXftoi, FReg64, FReg64>;
+def FsToIq : FPUCastInst<"ftoi", OPCODE_FTOI, AltairXftoi, FReg64, FReg32>;
+def FdToIq : FPUCastInst<"dtoi", OPCODE_DTOI, AltairXftoi, FReg64, FReg64>;
 
 // Extend
-def FsToFd : FPUCastInst<"ftod", 2, OPCODE_FTOD, any_fpextend, FReg64, FReg32>;
+def FsToFd : FPUCastInst<"ftod", OPCODE_FTOD, any_fpextend, FReg64, FReg32>;
 // Trunc
-def FdToFs : FPUCastInst<"dtof", 1, OPCODE_DTOF, any_fpround, FReg32, FReg64>;
+def FdToFs : FPUCastInst<"dtof", OPCODE_DTOF, any_fpround, FReg32, FReg64>;
 
 // Float comparisons
 // FR = AltairXISD::FCMP iY, iY
@@ -1056,23 +1059,27 @@ def FCmpRRd : FCMPInstRR<2, "d", FReg64>;
 // - Less than (lt)
 // - Greater than predicate can be matched by swapping the compared values: (a > b) -> (b < a)
 // Greater or equal, less than or equal, need an additional xor or setne, this is done during ISelLowering
-class FSCMPInstRR<string name, bits<2> size, string sizename, AltairXOpcode opcode,
-  SDPatternOperator setccop, RegisterClass regclass>
+// Comparison is only ordered
+def SDT_AltairXfscmp : SDTypeProfile<1, 3, [SDTCisVT<0, i8>, SDTCisFP<1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i32>]>;
+def AltairXfscmp : SDNode<"AltairXISD::FSCMP", SDT_AltairXfscmp, []>;
+
+class FSCMPInstRR<string name, bits<2> size, string sizename, int pred,
+  AltairXOpcode opcode, RegisterClass regclass>
   : AltairXInstALURR<opcode, size,
     (outs VIReg8:$rd),
     (ins regclass:$rs1, regclass:$rs2),
-    [(set VIReg8:$rd, (setccop regclass:$rs1, regclass:$rs2))],
+    [(set VIReg8:$rd, (AltairXfscmp regclass:$rs1, regclass:$rs2, pred))],
     !strconcat(name, ".", sizename), "$rd, $rs1, $rs2"> {
 }
 
-multiclass FSCMPInst<string name, AltairXOpcode opcode, SDPatternOperator setccop> {
-  def RRs : FSCMPInstRR<name, 1, "s", opcode, setccop, FReg32>;
-  def RRd : FSCMPInstRR<name, 2, "d", opcode, setccop, FReg64>;
+multiclass FSCMPInst<string name, AltairXOpcode opcode, int pred> {
+  def RRs : FSCMPInstRR<name, 1, "s", pred, opcode, FReg32>;
+  def RRd : FSCMPInstRR<name, 2, "d", pred, opcode, FReg64>;
 }
 
-defm FSe  : FSCMPInst<"fse",  OPCODE_FSE,  setoeq>;
-defm FSen : FSCMPInst<"fsen", OPCODE_FSEN, setone>;
-defm FSlt : FSCMPInst<"fslt", OPCODE_FSLT, setolt>;
+defm FSe   : FSCMPInst<"fse",  OPCODE_FSE,  0>;
+defm FSen  : FSCMPInst<"fsen", OPCODE_FSEN, 1>;
+defm FSlt  : FSCMPInst<"fslt", OPCODE_FSLT, 2>;
 
 // iX = AltairXISD::FCMOVE tval, fval, bool
 def SDT_AltairXfcmove : SDTypeProfile<1, 3, [SDTCisFP<0>, SDTCisFP<1>, SDTCisSameAs<1, 3>, SDTCisVT<2, i8>]>;

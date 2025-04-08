@@ -52,11 +52,12 @@ reverseCondition(const ConditionOperands &operands) noexcept {
   }
 }
 
-enum class SCMPCondCode : std::uint32_t {
-  EQ = 0b0001,  // Equal
-  NE = 0b1001,  // Not Equal
-  LT = 0b0101,  // Less (signed)
-  LTU = 0b1101, // Less (unsigned)
+// Natively supported condition codes for SCMP and FSCMP
+enum class SCMPCondCode : uint32_t {
+  EQ,  // Equal
+  NE,  // Not Equal
+  LT,  // Less (signed)
+  LTU, // Less (unsigned), not supported by FSCMP
 };
 
 // in instruction descr TSFlags
@@ -68,6 +69,7 @@ enum InstFormat {
   InstFormatUnary,
   InstFormatALURegImm9,
   InstFormatALURegRegImm9,
+  InstFormatMDURegImm9,
   InstFormatLSURegImm10,
   InstFormatFPURegImm16,
   InstFormatBRURelImm23,

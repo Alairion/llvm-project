@@ -35,8 +35,10 @@ enum NodeType {
   CMP,
   FCMP,
   BRCOND,
+  SCMP,
   SBIT,
   CMOVE,
+  FSCMP,
   FCMOVE,
   GAWRAPPER,
   ITOF,
@@ -104,7 +106,6 @@ private:
   SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSELECT(SDValue Op, SelectionDAG& DAG) const;
   SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBRIND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
 
