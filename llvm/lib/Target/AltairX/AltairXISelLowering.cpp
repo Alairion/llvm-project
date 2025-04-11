@@ -50,6 +50,12 @@ static constexpr std::array<llvm::MVT, 6> AllMVT = {
 static constexpr std::array<MCPhysReg, 8> GPRArgRegs = {
     AltairX::R1, AltairX::R2, AltairX::R3, AltairX::R4,
     AltairX::R5, AltairX::R6, AltairX::R7, AltairX::R8};
+static constexpr std::array<MCPhysReg, 8> FP32ArgRegs = {
+    AltairX::F0, AltairX::F1, AltairX::F2, AltairX::F3,
+    AltairX::F4, AltairX::F5, AltairX::F6, AltairX::F7};
+static constexpr std::array<MCPhysReg, 8> FP64ArgRegs = {
+    AltairX::D0, AltairX::D1, AltairX::D2, AltairX::D3,
+    AltairX::D4, AltairX::D5, AltairX::D6, AltairX::D7};
 
 AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
                                              const AltairXSubtarget &STI)
@@ -70,6 +76,9 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   // Use i32 for setcc operations results (slt, sgt, ...).
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
+
+  // loadext f64 from f32 is not natively supported
+  setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, LegalizeAction::Expand);
 
   // Constants
   setOperationAction(ISD::Constant, AllIntsMVT, LegalizeAction::Legal);
@@ -147,13 +156,14 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
-  setOperationAction(ISD::VAARG, MVT::Other, Expand);
+  setOperationAction(ISD::VAARG, MVT::Other, Custom);
   setOperationAction(ISD::VACOPY, MVT::Other, Expand);
 
   // Set minimum and preferred function alignment, and loop alignment
   setMinFunctionAlignment(Align{4});
+  setMinStackArgumentAlignment(Align{8});
   setPrefFunctionAlignment(Align{4});
-  setPrefLoopAlignment(Align{4});
+  setPrefLoopAlignment(Align{1});
 }
 
 SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
@@ -190,6 +200,8 @@ SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
     return LowerBRIND(Op, DAG);
   case ISD::VASTART:
     return LowerVASTART(Op, DAG);
+  case ISD::VAARG:
+    return LowerVAARG(Op, DAG);
   default:
     llvm_unreachable("unimplemented operand");
   }
@@ -306,9 +318,10 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(Ins, AltairX_CCallingConv);
 
   // Used with varargs to acumulate store chains.
+  // AXIMPR: floats are not supported
   std::vector<SDValue> outChains;
   if (IsVarArg && MF.getFrameInfo().hasVAStart()) {
-    constexpr int64_t slotSize = 8;
+    constexpr int64_t slotSize = 8; // all args are in 8 bytes slots
     unsigned firstReg = CCInfo.getFirstUnallocated(GPRArgRegs);
 
     // Offset of the first variable argument from stack pointer, and size of
@@ -566,61 +579,6 @@ AltairXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
 
   return LowerCallResult(CLI.Chain, glue, retLocs, DL, DAG, InVals);
-}
-
-/// HandleByVal - Every parameter *after* a byval parameter is passed
-/// on the stack.  Remember the next parameter register to allocate,
-/// and then confiscate the rest of the parameter registers to insure
-/// this.
-void AltairXTargetLowering::HandleByVal(CCState *State, unsigned int &Size,
-                                        Align Align) const {
-  /*
-// Byval (as with any stack) slots are always at least 4 byte aligned.
-
-unsigned Reg = State->AllocateReg(GPRArgRegs);
-if (!Reg)
-  return;
-
-unsigned AlignInRegs = Align / 4;
-unsigned Waste = (AltairX::X4 - Reg) % AlignInRegs;
-for (unsigned i = 0; i < Waste; ++i)
-  Reg = State->AllocateReg(GPRArgRegs);
-
-if (!Reg)
-  return;
-
-unsigned Excess = 4 * (AltairX::X4 - Reg);
-
-// Special case when NSAA != SP and parameter size greater than size of
-// all remained GPR regs. In that case we can't split parameter, we must
-// send it to stack. We also must set NCRN to X4, so waste all
-// remained registers.
-const unsigned NSAAOffset = State->getNextStackOffset();
-if (NSAAOffset != 0 && Size > Excess) {
-  while (State->AllocateReg(GPRArgRegs))
-    ;
-  return;
-}
-
-// First register for byval parameter is the first register that wasn't
-// allocated before this method call, so it would be "reg".
-// If parameter is small enough to be saved in range [reg, r4), then
-// the end (first after last) register would be reg + param-size-in-regs,
-// else parameter would be splitted between registers and stack,
-// end register would be r4 in this case.
-unsigned ByValRegBegin = Reg;
-unsigned ByValRegEnd = std::min<unsigned>(Reg + Size / 4, AltairX::X4);
-State->addInRegsParamInfo(ByValRegBegin, ByValRegEnd);
-// Note, first register is allocated in the beginning of function already,
-// allocate remained amount of registers we need.
-for (unsigned i = Reg + 1; i != ByValRegEnd; ++i)
-  State->AllocateReg(GPRArgRegs);
-// A byval parameter that is split between registers and memory needs its
-// size truncated here.
-// In the case where the entire structure fits in registers, we set the
-// size in memory to zero.
-Size = std::max<int>(Size - Excess, 0);
-*/
 }
 
 SDValue
@@ -1153,4 +1111,53 @@ SDValue AltairXTargetLowering::LowerVASTART(SDValue Op,
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
   return DAG.getStore(Op.getOperand(0), dl, FI, Op.getOperand(1),
                       MachinePointerInfo(SV));
+}
+
+namespace {
+
+SDValue getAlignedValue(SelectionDAG &DAG, SDValue value, Align align) {
+  SDLoc dl{value};
+
+  SDValue incrVal = DAG.getConstant(align.value() - 1, dl, MVT::i64);
+  SDValue incr = DAG.getNode(ISD::ADD, dl, MVT::i64, value, incrVal);
+
+  SDValue alignVal =
+      DAG.getSignedConstant(-static_cast<int64_t>(align.value()), dl, MVT::i64);
+  return DAG.getNode(ISD::AND, dl, MVT::i64, incr, alignVal);
+}
+
+} // namespace
+
+SDValue AltairXTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
+  SDNode *node = Op.getNode();
+  SDLoc dl{Op};
+
+  //an input chain, a pointer, a SRCVALUE and the alignment
+  const Value *value = cast<SrcValueSDNode>(node->getOperand(2))->getValue();
+  const EVT type = node->getValueType(0);
+  SDValue chain = node->getOperand(0);
+  SDValue ptr = node->getOperand(1);
+  const MachinePointerInfo ptrInfo{value};
+
+  SDValue VAListLoad = DAG.getLoad(MVT::i64, dl, chain, ptr, ptrInfo);
+  SDValue VAList = VAListLoad;
+
+  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+  if (MaybeAlign MA{node->getConstantOperandVal(3)};
+      MA && *MA > TLI.getMinStackArgumentAlignment()) {
+    VAList = getAlignedValue(DAG, VAList, *MA);
+  }
+
+  // Increment the pointer, VAList, to the next vaarg
+  constexpr uint64_t ArgMinAlign = 8;
+  const auto typeAlign = DAG.getDataLayout().getTypeAllocSize(
+      type.getTypeForEVT(*DAG.getContext()));
+  chain = DAG.getNode(
+      ISD::ADD, dl, MVT::i64, VAList,
+      DAG.getConstant(alignTo(typeAlign, ArgMinAlign), dl, MVT::i64));
+  // Store the incremented VAList to the legalized pointer
+  chain = DAG.getStore(VAListLoad.getValue(1), dl, chain, ptr, ptrInfo);
+  // Load the actual argument out of the pointer VAList
+  return DAG.getLoad(type, dl, chain, VAList, MachinePointerInfo());
+
 }
