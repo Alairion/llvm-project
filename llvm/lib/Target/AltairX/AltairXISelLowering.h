@@ -81,9 +81,6 @@ private:
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
 
-  void HandleByVal(CCState *State, unsigned int &Size,
-                   Align Align) const override;
-
   EVT getSetCCResultType(const DataLayout &, LLVMContext &,
                          EVT VT) const override;
 
@@ -111,6 +108,7 @@ private:
 
   // Others
   SDValue LowerVASTART(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerVAARG(SDValue Op, SelectionDAG& DAG) const;
 };
 } // namespace llvm
 
