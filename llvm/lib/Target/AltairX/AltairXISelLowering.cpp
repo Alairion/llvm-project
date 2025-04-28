@@ -233,8 +233,16 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AltairXISD::SBit";
   case AltairXISD::CMOVE:
     return "AltairXISD::CMove";
+  case AltairXISD::FCMOVE:
+    return "AltairXISD::CMove";
   case AltairXISD::GAWRAPPER:
     return "AltairXISD::GAWrapper";
+  case AltairXISD::ITOF:
+    return "AltairXISD::ITOF";
+  case AltairXISD::FTOI:
+    return "AltairXISD::FTOI";
+  case AltairXISD::VAARG:
+    return "AltairXISD::VAARG";
   default:
     return nullptr;
   }
@@ -278,6 +286,8 @@ SDValue lowerFromRegLoc(SelectionDAG &DAG, SDValue Chain, const CCValAssign &VA,
 // passed with CCValAssign::Indirect.
 SDValue lowerFromMemLoc(SelectionDAG &DAG, SDValue Chain, const CCValAssign &VA,
                         const SDLoc &DL) {
+  assert(VA.isMemLoc());
+
   switch (VA.getLocInfo()) {
   default:
     llvm_unreachable("Unexpected CCValAssign::LocInfo");
@@ -322,58 +332,71 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
   std::vector<SDValue> outChains;
   if (IsVarArg && MF.getFrameInfo().hasVAStart()) {
     constexpr int64_t slotSize = 8; // all args are in 8 bytes slots
-    unsigned firstReg = CCInfo.getFirstUnallocated(GPRArgRegs);
+    const int32_t intRegCount = CCInfo.getFirstUnallocated(GPRArgRegs);
+    const int32_t floatRegCount = CCInfo.getFirstUnallocated(FP64ArgRegs);
 
     // Offset of the first variable argument from stack pointer, and size of
     // the vararg save area. For now, the varargs save area is either zero or
     // large enough to hold a0-a7.
     // If all registers are allocated, then all varargs must be passed on the
     // stack and we don't need to save any argregs.
-    int vaargsOffset = 0;
-    int vaargsSaveSize = 0;
-    if (GPRArgRegs.size() == firstReg) {
-      vaargsOffset = CCInfo.getStackSize();
-    } else {
-      vaargsSaveSize = slotSize * (GPRArgRegs.size() - firstReg);
-      vaargsOffset = -vaargsSaveSize;
-    }
-
-    MachineFrameInfo &MFI = MF.getFrameInfo();
+    MachineFrameInfo &frameInfo = MF.getFrameInfo();
 
     // Record the frame index of the first variable argument
     // which is a value necessary to VASTART.
     auto *info = MF.getInfo<AltairXMachineFunctionInfo>();
     info->VarArgsFrameIndex =
-        MFI.CreateFixedObject(slotSize, vaargsOffset, true);
+        frameInfo.CreateFixedObject(1, CCInfo.getStackSize(), true);
+    info->VarArgsGPOffset = intRegCount * slotSize;
+    info->VarArgsFPOffset =
+        GPRArgRegs.size() * slotSize + floatRegCount * slotSize;
+    info->RegSaveFrameIndex = frameInfo.CreateStackObject(
+        GPRArgRegs.size() * slotSize + FP64ArgRegs.size() * slotSize, Align(8),
+        false);
 
-    // Copy the integer registers that may have been used for passing varargs
-    // to the vararg save area.
-    const auto *regClass = &AltairX::GPIReg64RegClass;
-    MachineRegisterInfo &regInfo = MF.getRegInfo();
-    for (unsigned i = firstReg; i < GPRArgRegs.size(); ++i) {
-      const Register reg = regInfo.createVirtualRegister(regClass);
-      regInfo.addLiveIn(GPRArgRegs[i], reg);
-
-      int fi = MFI.CreateFixedObject(slotSize, vaargsOffset, true);
-      vaargsOffset += slotSize;
-
-      SDValue arg = DAG.getCopyFromReg(Chain, DL, reg, MVT::i64);
-      SDValue offset = DAG.getFrameIndex(fi, getPointerTy(DAG.getDataLayout()));
-      const auto ptrInfo = MachinePointerInfo::getFixedStack(MF, fi);
-      SDValue store = DAG.getStore(Chain, DL, arg, offset, ptrInfo);
-
-      auto *memop = cast<StoreSDNode>(store.getNode())->getMemOperand();
-      memop->setValue((Value *)nullptr);
-
-      outChains.push_back(store);
+    // keeping live input value
+    SmallVector<SDValue, 8> liveIntRegs;
+    for (auto reg : ArrayRef<MCPhysReg>{GPRArgRegs}.slice(intRegCount)) {
+      liveIntRegs.emplace_back(DAG.getCopyFromReg(
+          Chain, DL, MF.addLiveIn(reg, &AltairX::GPIReg64RegClass), MVT::i64));
     }
+
+    SmallVector<SDValue, 8> memOps;
+    SDValue frameIndex = DAG.getFrameIndex(info->RegSaveFrameIndex, MVT::i64);
+    uint64_t stackOffset = info->VarArgsGPOffset;
+    for (auto &&val : liveIntRegs) {
+      SDValue fi = DAG.getNode(ISD::ADD, DL, MVT::i64, frameIndex,
+                               DAG.getIntPtrConstant(stackOffset, DL));
+      const auto ptrInfo = MachinePointerInfo::getFixedStack(
+          MF, info->RegSaveFrameIndex, stackOffset);
+      SDValue store = DAG.getStore(val.getValue(1), DL, val, fi, ptrInfo);
+      memOps.emplace_back(store);
+      stackOffset += slotSize;
+    }
+
+    SmallVector<SDValue, 8> liveFloatRegs;
+    for (auto reg : ArrayRef<MCPhysReg>{FP64ArgRegs}.slice(floatRegCount)) {
+      liveFloatRegs.emplace_back(DAG.getCopyFromReg(
+          Chain, DL, MF.addLiveIn(reg, &AltairX::FReg64RegClass), MVT::f64));
+    }
+
+    for (auto &&val : liveFloatRegs) {
+      SDValue fi = DAG.getNode(ISD::ADD, DL, MVT::i64, frameIndex,
+                               DAG.getIntPtrConstant(stackOffset, DL));
+      const auto ptrInfo = MachinePointerInfo::getFixedStack(
+          MF, info->RegSaveFrameIndex, stackOffset);
+      SDValue store = DAG.getStore(val.getValue(1), DL, val, fi, ptrInfo);
+      memOps.push_back(store);
+      stackOffset += slotSize;
+    }
+
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, memOps);
   }
 
   for (CCValAssign &VA : argLocs) {
     if (VA.isRegLoc()) {
       InVals.push_back(lowerFromRegLoc(DAG, Chain, VA, DL));
     } else {
-      assert(VA.isMemLoc());
       InVals.push_back(lowerFromMemLoc(DAG, Chain, VA, DL));
     }
   }
@@ -642,6 +665,198 @@ EVT AltairXTargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
   }
   // booleans are i8
   return MVT::i8;
+}
+
+MachineBasicBlock *
+AltairXTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
+                                                   MachineBasicBlock *MBB) const {
+
+  switch(MI.getOpcode()) {
+  case AltairX::VAARG:
+    return EmitVAARGWithCustomInserter(MI, MBB);
+  default:
+    llvm_unreachable("Unexpected instruction type to insert");
+  }
+
+  return MBB;
+}
+
+MachineBasicBlock *AltairXTargetLowering::EmitVAARGWithCustomInserter(
+    MachineInstr &MI, MachineBasicBlock *MBB) const {
+
+  // Operands to this pseudo-instruction:
+  // 0  ) destination address (reg)
+  // 1-2) va_list* (addrimm, c.f. AltairXDAGToDAGISel::selectAddrImm)
+  //      1) base
+  //      2) offset
+  // 3  ) size (in bytes) of vaarg type (=vaarg second arg)
+  // 4  ) 0 = int (gp_offset) ; 1 = float (fp_offset)
+  // 5  ) alignment of type
+  // 6  ) FR (implicit-def)
+  // struct va_list {
+  //   i32 gp_offset
+  //   i32 fp_offset
+  //   ptr overflow_area
+  //   ptr reg_save_area
+  // }
+  // sizeof(va_list) = 24
+  // alignment(va_list) = 8
+
+  assert(MI.getNumOperands() == 7 && "VAARG must have 8 operands!");
+
+  MachineFunction &func = *MBB->getParent();
+  const TargetInstrInfo &instInfo = *Subtarget.getInstrInfo();
+  MachineRegisterInfo &regInfo = func.getRegInfo();
+  const TargetRegisterClass *addrRegClass = getRegClassFor(MVT::i64);
+  const MIMetadata metadata{MI};
+
+  const Register destReg = MI.getOperand(0).getReg();
+  const MachineOperand& base = MI.getOperand(1);
+  const MachineOperand& offset = MI.getOperand(2);
+  const uint64_t argSize = MI.getOperand(3).getImm();
+  const uint64_t argMode = MI.getOperand(4).getImm();
+  const uint64_t argAlign = MI.getOperand(5).getImm();
+  const uint64_t alignedArgSize =
+      alignTo(argSize, Align(std::max(argAlign, 8ull)));
+
+  // Memory reference
+  assert(MI.hasOneMemOperand() && "VAARG must have single memoperand");
+  auto *oldMMO = MI.memoperands().front();
+  // Clone the MMO into two separate MMOs for loading and storing
+  auto *loadOnlyMMO = func.getMachineMemOperand(
+      oldMMO, oldMMO->getFlags() & ~MachineMemOperand::MOStore);
+  auto *storeOnlyMMO = func.getMachineMemOperand(
+      oldMMO, oldMMO->getFlags() & ~MachineMemOperand::MOLoad);
+
+  constexpr int64_t slotSize = 8; // all args are in 8 bytes slots
+  constexpr uint64_t intRegsCount = 8;
+  constexpr uint64_t floatRegsCount = 8;
+  const bool useFPOffset = (argMode == 1);
+  const uint64_t maxOffset = intRegsCount * slotSize +
+                             (useFPOffset ? floatRegsCount * slotSize : 0);
+
+  // First emit code to check if gp_offset (or fp_offset) is below the bound.
+  // If so, pull the argument from reg_save_area. (branch to offsetMBB)
+  // If not, pull from overflow_area. (branch to overflowMBB)
+
+  // Registers for the PHI in endMBB
+  // Argument address computed by offsetMBB
+  Register offsetDestReg = regInfo.createVirtualRegister(addrRegClass);
+  // Argument address computed by overflowMBB
+  Register overflowDestReg = regInfo.createVirtualRegister(addrRegClass);
+
+  const BasicBlock *llvmBB = MBB->getBasicBlock();
+  auto *overflowMBB = func.CreateMachineBasicBlock(llvmBB);
+  auto *offsetMBB = func.CreateMachineBasicBlock(llvmBB);
+  auto *endMBB = func.CreateMachineBasicBlock(llvmBB);
+
+  // Insert the new basic blocks
+  auto it = std::next(MBB->getIterator());
+  func.insert(it, offsetMBB);
+  func.insert(it, overflowMBB);
+  func.insert(it, endMBB);
+
+  // Transfer the remainder of MBB and its successor edges to endMBB.
+  endMBB->splice(endMBB->begin(), MBB, std::next(MI.getIterator()), MBB->end());
+  endMBB->transferSuccessorsAndUpdatePHIs(MBB);
+
+  // Make offsetMBB and overflowMBB successors of MBB
+  MBB->addSuccessor(offsetMBB);
+  MBB->addSuccessor(overflowMBB);
+
+  // endMBB is a successor of both offsetMBB and overflowMBB
+  offsetMBB->addSuccessor(endMBB);
+  overflowMBB->addSuccessor(endMBB);
+
+  // Load the offset value into a register
+  Register offsetReg = regInfo.createVirtualRegister(addrRegClass);
+  BuildMI(MBB, metadata, instInfo.get(AltairX::LoadRIdZX64), offsetReg)
+      .add(base)
+      .addDisp(offset, useFPOffset ? 4ull : 0ull)
+      .setMemRefs(loadOnlyMMO);
+
+  // Check if there is enough room left to pull this argument.
+  Register maxOffsetReg = regInfo.createVirtualRegister(addrRegClass);
+  BuildMI(MBB, metadata, instInfo.get(AltairX::ConstantToRegq), maxOffsetReg)
+    .addImm(maxOffset + slotSize - alignedArgSize);
+  BuildMI(MBB, metadata, instInfo.get(AltairX::CmpRRq))
+    .addReg(offsetReg)
+    .addReg(maxOffsetReg);
+
+  // Branch to "overflowMBB" if offset >= max
+  // Fall through to "offsetMBB" otherwise
+  BuildMI(MBB, metadata, instInfo.get(AltairX::PseudoBRC))
+      .addMBB(overflowMBB)
+      .addImm(static_cast<int64_t>(ISD::CondCode::SETUGE));
+
+  // Read the reg_save_area address.
+  Register regSaveReg = regInfo.createVirtualRegister(addrRegClass);
+  BuildMI(offsetMBB, metadata, instInfo.get(AltairX::LoadRIq), regSaveReg)
+      .add(base)
+      .addDisp(offset, 16ull)
+      .setMemRefs(loadOnlyMMO);
+
+  // Add the offset to the reg_save_area to get the final address.
+  BuildMI(offsetMBB, metadata, instInfo.get(AltairX::AddRRq), offsetDestReg)
+      .addReg(offsetReg)
+      .addReg(regSaveReg);
+
+  // Compute the offset for the next argument
+  Register nextOffsetReg = regInfo.createVirtualRegister(addrRegClass);
+  BuildMI(offsetMBB, metadata, instInfo.get(AltairX::AddRIq), nextOffsetReg)
+      .addReg(offsetReg)
+      .addImm(useFPOffset ? 16ull : 8ull);
+
+  // Store it back into the va_list.
+  BuildMI(offsetMBB, metadata, instInfo.get(AltairX::StoreRIdT64))
+      .addReg(nextOffsetReg)
+      .add(base)
+      .addDisp(offset, useFPOffset ? 4ull : 0ull)
+      .setMemRefs(storeOnlyMMO);
+
+  // Jump to endMBB
+  BuildMI(offsetMBB, metadata, instInfo.get(AltairX::BRA)).addMBB(endMBB);
+
+  // Emit code to use overflow area
+  // Load the overflow_area address into a register.
+  Register overflowAddrReg = regInfo.createVirtualRegister(addrRegClass);
+  BuildMI(overflowMBB, metadata, instInfo.get(AltairX::LoadRIq),
+          overflowAddrReg)
+      .add(base)
+      .addDisp(offset, 8)
+      .setMemRefs(loadOnlyMMO);
+
+  // Note: align address here if needed later!
+  BuildMI(overflowMBB, metadata, instInfo.get(TargetOpcode::COPY),
+    overflowDestReg)
+      .addReg(overflowAddrReg);
+
+  // Compute the next overflow address after this argument.
+  // (the overflow address should be kept 8-byte aligned)
+  Register nextAddrReg = regInfo.createVirtualRegister(addrRegClass);
+  BuildMI(overflowMBB, metadata, instInfo.get(AltairX::AddRIq), nextAddrReg)
+      .addReg(overflowDestReg)
+      .addImm(alignedArgSize);
+
+  // Store the new overflow address.
+  BuildMI(overflowMBB, metadata, instInfo.get(AltairX::StoreRIq))
+      .addReg(nextAddrReg)
+      .add(base)
+      .addDisp(offset, 8)
+      .setMemRefs(storeOnlyMMO);
+
+  // emit the PHI to the front of endMBB.
+  BuildMI(*endMBB, endMBB->begin(), metadata, instInfo.get(AltairX::PHI),
+          destReg)
+      .addReg(offsetDestReg)
+      .addMBB(offsetMBB)
+      .addReg(overflowDestReg)
+      .addMBB(overflowMBB);
+
+  // Erase the pseudo instruction
+  MI.eraseFromParent();
+
+  return endMBB;
 }
 
 SDValue AltairXTargetLowering::LowerFP_TO_SINT(SDValue Op,
@@ -1099,18 +1314,41 @@ SDValue AltairXTargetLowering::LowerBRIND(SDValue Op, SelectionDAG &DAG) const {
 
 SDValue AltairXTargetLowering::LowerVASTART(SDValue Op,
                                             SelectionDAG &DAG) const {
-  MachineFunction &MF = DAG.getMachineFunction();
-  auto *info = MF.getInfo<AltairXMachineFunctionInfo>();
+  auto &func = DAG.getMachineFunction();
   SDLoc dl{Op};
-
-  SDValue FI = DAG.getFrameIndex(info->VarArgsFrameIndex,
-                                 getPointerTy(MF.getDataLayout()));
-
-  // vastart just stores the address of the VarArgsFrameIndex slot into the
-  // memory location argument.
+  SDValue chain = Op.getOperand(0);
+  SDValue ptr = Op.getOperand(1);
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
-  return DAG.getStore(Op.getOperand(0), dl, FI, Op.getOperand(1),
-                      MachinePointerInfo(SV));
+  auto *info = func.getInfo<AltairXMachineFunctionInfo>();
+  SmallVector<SDValue, 4> memOps;
+
+  // Store gp_offset
+  memOps.emplace_back(DAG.getStore(
+      chain, dl, DAG.getConstant(info->VarArgsGPOffset, dl, MVT::i32), ptr,
+      MachinePointerInfo(SV)));
+
+  // Store fp_offset
+  ptr = DAG.getNode(ISD::ADD, dl, MVT::i64, ptr,
+                    DAG.getConstant(4, dl, MVT::i64));
+  memOps.emplace_back(DAG.getStore(
+      chain, dl, DAG.getConstant(info->VarArgsFPOffset, dl, MVT::i32), ptr,
+      MachinePointerInfo(SV, 4)));
+
+  // Store ptr to overflow_arg_area
+  ptr = DAG.getNode(ISD::ADD, dl, MVT::i64, ptr,
+                    DAG.getConstant(4, dl, MVT::i64));
+  SDValue vaFI = DAG.getFrameIndex(info->VarArgsFrameIndex, MVT::i64);
+  memOps.emplace_back(
+      DAG.getStore(chain, dl, vaFI, ptr, MachinePointerInfo(SV, 8)));
+
+  // Store ptr to reg_save_area.
+  ptr = DAG.getNode(ISD::ADD, dl, MVT::i64, ptr,
+                    DAG.getConstant(8, dl, MVT::i64));
+  SDValue rsFI = DAG.getFrameIndex(info->RegSaveFrameIndex, MVT::i64);
+  memOps.emplace_back(
+      DAG.getStore(chain, dl, rsFI, ptr, MachinePointerInfo(SV, 16)));
+
+  return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, memOps);
 }
 
 namespace {
@@ -1132,32 +1370,30 @@ SDValue AltairXTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
   SDNode *node = Op.getNode();
   SDLoc dl{Op};
 
-  //an input chain, a pointer, a SRCVALUE and the alignment
-  const Value *value = cast<SrcValueSDNode>(node->getOperand(2))->getValue();
   const EVT type = node->getValueType(0);
   SDValue chain = node->getOperand(0);
   SDValue ptr = node->getOperand(1);
+  const Value* value = cast<SrcValueSDNode>(node->getOperand(2))->getValue();
+  const uint64_t align = Op.getConstantOperandVal(3);
+
+  const uint8_t mode = type.isFloatingPoint() ? 1 : 0;
+  const uint64_t size = DAG.getDataLayout().getTypeAllocSize(
+      type.getTypeForEVT(*DAG.getContext()));
+  // Decide which area this value should be read from
   const MachinePointerInfo ptrInfo{value};
 
-  SDValue VAListLoad = DAG.getLoad(MVT::i64, dl, chain, ptr, ptrInfo);
-  SDValue VAList = VAListLoad;
+  // VAARG returns two values: Variable Argument Address, Chain
+  SDVTList vts = DAG.getVTList(getPointerTy(DAG.getDataLayout()), MVT::Other);
+  std::array<SDValue, 5> ops = {chain, ptr,
+                                DAG.getTargetConstant(size, dl, MVT::i64),
+                                DAG.getTargetConstant(mode, dl, MVT::i8),
+                                DAG.getTargetConstant(align, dl, MVT::i64)};
+  SDValue vaarg = DAG.getMemIntrinsicNode(
+      AltairXISD::VAARG, dl, vts, ops, MVT::i64, ptrInfo, std::nullopt,
+      MachineMemOperand::MOLoad | MachineMemOperand::MOStore);
+  chain = vaarg.getValue(1);
 
-  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  if (MaybeAlign MA{node->getConstantOperandVal(3)};
-      MA && *MA > TLI.getMinStackArgumentAlignment()) {
-    VAList = getAlignedValue(DAG, VAList, *MA);
-  }
-
-  // Increment the pointer, VAList, to the next vaarg
-  constexpr uint64_t ArgMinAlign = 8;
-  const auto typeAlign = DAG.getDataLayout().getTypeAllocSize(
-      type.getTypeForEVT(*DAG.getContext()));
-  chain = DAG.getNode(
-      ISD::ADD, dl, MVT::i64, VAList,
-      DAG.getConstant(alignTo(typeAlign, ArgMinAlign), dl, MVT::i64));
-  // Store the incremented VAList to the legalized pointer
-  chain = DAG.getStore(VAListLoad.getValue(1), dl, chain, ptr, ptrInfo);
-  // Load the actual argument out of the pointer VAList
-  return DAG.getLoad(type, dl, chain, VAList, MachinePointerInfo());
-
+  // Load the next argument and return it
+  return DAG.getLoad(type, dl, chain, vaarg, MachinePointerInfo{});
 }
+

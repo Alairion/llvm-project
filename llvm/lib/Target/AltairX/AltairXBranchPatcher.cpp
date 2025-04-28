@@ -157,6 +157,13 @@ void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &block,
   auto cmpIt = findNearestCmp(inst.getIterator().getReverse(), rend);
   assert(cmpIt != rend && "BRC without CMP");
   MachineInstr *cmpInst = to_address(cmpIt);
+
+  // if right operand is already an imm, throw error
+  if(cmpInst->getOperand(1).isImm()) {
+    llvm_unreachable("Please use ConstantToReg + CmpRR in codegen!");
+    return;
+  }
+
   if (swapCMPOps) {
     auto *newCmp = BuildMI(block, *cmpInst, cmpInst->getDebugLoc(),
                            instInfo->get(cmpInst->getOpcode()))
@@ -208,8 +215,9 @@ uint32_t getCmpImmVersion(uint32_t opcode) {
 
 void AltairXBranchPatcher::runOnCmp(MachineBasicBlock &block,
                                     MachineInstr &inst) {
-  const auto reg = inst.getOperand(1).getReg();
-  const auto killing = inst.getOperand(1).isKill();
+  auto& right = inst.getOperand(1);
+  const auto reg = right.getReg();
+  const auto killing = right.isKill();
 
   MachineOperand *operand = AltairXInstrInfo::getLatestRegDef(inst, reg);
   if (!operand) {
@@ -233,7 +241,7 @@ void AltairXBranchPatcher::runOnCmp(MachineBasicBlock &block,
 
   const auto imm = definition->getOperand(1).getImm();
   if (!isInt<32>(imm)) {
-    return; // if imm does not fit imm size we will use a reg anyway...
+    return; // if imm does not fit imm size we will use a reg
   }
 
   const auto cmpRIOpcode = getCmpImmVersion(inst.getOpcode());

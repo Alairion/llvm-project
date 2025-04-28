@@ -22,7 +22,14 @@ public:
   AltairXMachineFunctionInfo(const Function &, const TargetSubtargetInfo *){};
 
   // Used for vastart lowering
-  int VarArgsFrameIndex = 0;
+  // VarArgsFrameIndex - FrameIndex for start of vaargs area.
+  int32_t VarArgsFrameIndex = 0;
+  // RegSaveFrameIndex - vaarg func register save area.
+  int32_t RegSaveFrameIndex = 0;
+  // VarArgsGPOffset - vaarg func int reg offset.
+  uint32_t VarArgsGPOffset = 0;
+  // VarArgsFPOffset - vaarg func fp reg offset.
+  uint32_t VarArgsFPOffset = 0;
 };
 
 } // end of namespace llvm

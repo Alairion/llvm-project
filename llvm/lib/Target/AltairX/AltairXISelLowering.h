@@ -43,6 +43,7 @@ enum NodeType {
   GAWRAPPER,
   ITOF,
   FTOI,
+  VAARG,
 };
 }
 
@@ -83,6 +84,13 @@ private:
 
   EVT getSetCCResultType(const DataLayout &, LLVMContext &,
                          EVT VT) const override;
+
+  MachineBasicBlock *
+  EmitInstrWithCustomInserter(MachineInstr &MI,
+                              MachineBasicBlock *MBB) const override;
+
+  MachineBasicBlock *EmitVAARGWithCustomInserter(MachineInstr &MI,
+                                                 MachineBasicBlock *MBB) const;
 
   // Float handling:
   SDValue LowerFP_TO_SINT(SDValue Op, SelectionDAG& DAG) const;

@@ -16,7 +16,7 @@
 #include "AltairXFrameLowering.h"
 #include "AltairXISelLowering.h"
 #include "AltairXInstrInfo.h"
-#include "llvm/CodeGen/SelectionDAGTargetInfo.h"
+#include "AltairXSelectionDAGInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCInstrItineraries.h"
@@ -28,7 +28,7 @@ namespace llvm {
 
 class AltairXSubtarget : public AltairXGenSubtargetInfo {
 protected:
-  SelectionDAGTargetInfo TSInfo;
+  AltairXSelectionDAGInfo TSInfo;
   AltairXInstrInfo InstrInfo;
   AltairXFrameLowering FrameLowering;
   AltairXTargetLowering TLInfo;
@@ -49,7 +49,7 @@ public:
                                                     StringRef TuneCPU,
                                                     const TargetMachine &TM);
 
-  const SelectionDAGTargetInfo *getSelectionDAGInfo() const override {
+  const AltairXSelectionDAGInfo* getSelectionDAGInfo() const override {
     return &TSInfo;
   }
 

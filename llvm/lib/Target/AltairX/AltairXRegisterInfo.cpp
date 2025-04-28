@@ -128,22 +128,22 @@ namespace {
 
 bool isSpill(std::uint32_t opcode) {
   static constexpr std::array validOpcodes = {
-      AltairX::StoreRIb, AltairX::StoreRIw,
-      AltairX::StoreRId, AltairX::StoreRIq,
-      AltairX::FStoreRIs, AltairX::FStoreRId};
+      AltairX::StoreRIb,    AltairX::StoreRIbT16, AltairX::StoreRIbT32,
+      AltairX::StoreRIbT64, AltairX::StoreRId,    AltairX::StoreRIdT64,
+      AltairX::StoreRIq,    AltairX::StoreRIw,    AltairX::StoreRIwT32,
+      AltairX::StoreRIwT64, AltairX::FStoreRIs,   AltairX::FStoreRId};
   return std::find(validOpcodes.begin(), validOpcodes.end(), opcode) !=
          validOpcodes.end();
 }
 
 bool isReload(std::uint32_t opcode) {
   static constexpr std::array validOpcodes = {
-      AltairX::LoadRIb,     AltairX::LoadRIw,     AltairX::LoadRId,
-      AltairX::LoadRIq,     AltairX::LoadSExtRIb, AltairX::LoadSExtRIw,
-      AltairX::LoadSExtRId, AltairX::LoadRIbAX16, AltairX::LoadRIbAX32,
-      AltairX::LoadRIbAX64, AltairX::LoadRIwAX32, AltairX::LoadRIwAX64,
-      AltairX::LoadRIdAX64, AltairX::LoadRIbZX16, AltairX::LoadRIbZX32,
-      AltairX::LoadRIbZX64, AltairX::LoadRIwZX32, AltairX::LoadRIwZX64,
-      AltairX::LoadRIdZX64, AltairX::FLoadRIs,    AltairX::FLoadRId};
+      AltairX::LoadRIb,     AltairX::LoadRIbAX16, AltairX::LoadRIbAX32,
+      AltairX::LoadRIbAX64, AltairX::LoadRIbZX16, AltairX::LoadRIbZX32,
+      AltairX::LoadRIbZX64, AltairX::LoadRId,     AltairX::LoadRIdAX64,
+      AltairX::LoadRIdZX64, AltairX::LoadRIq,     AltairX::LoadRIw,
+      AltairX::LoadRIwAX32, AltairX::LoadRIwAX64, AltairX::LoadRIwZX32,
+      AltairX::LoadRIwZX64, AltairX::FLoadRIs,    AltairX::FLoadRId};
 
   return std::find(validOpcodes.begin(), validOpcodes.end(), opcode) !=
          validOpcodes.end();
