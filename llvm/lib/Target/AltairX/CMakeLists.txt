@@ -26,6 +26,7 @@ add_llvm_target(AltairXCodeGen
   AltairXSubtarget.cpp
   AltairXTargetObjectFile.cpp
   AltairXISelDAGToDAG.cpp
+  AltairXSelectionDAGInfo.cpp
   AltairXTargetMachine.cpp
   
   LINK_COMPONENTS

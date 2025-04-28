@@ -55,9 +55,24 @@ multiclass SizedUImm<int size> {
 defm "" : SizedUImm<3>;
 defm "" : SizedUImm<18>;
 
-// Addressing mode
+def shiftAmount : Operand<i64> {
+  let EncoderMethod = "getImmOpValue";
+}
+
+// Addressing modes
 def addr : ComplexPattern<iPTR, 3, "selectAddr", [], []>;
 def addrimm : ComplexPattern<iPTR, 2, "selectAddrImm", [add, frameindex], []>;
+
+// Addressing modes operands
+def addrop : Operand<i64> {
+  let MIOperandInfo = (ops GPIReg64, GPIReg64, i64imm);
+  let OperandType = "OPERAND_MEMORY";
+}
+
+def addrimmop : Operand<i64> {
+  let MIOperandInfo = (ops GPIReg64, i64imm);
+  let OperandType = "OPERAND_MEMORY";
+}
 
 def SDT_AltairXGAWRAPPER : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
 def AltairXGAWRAPPER : SDNode<"AltairXISD::GAWRAPPER", SDT_AltairXGAWRAPPER, []>;
@@ -85,7 +100,7 @@ def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_CallSeqStart, [SDNPHasChain
 def SDT_CallSeqEnd : SDCallSeqEnd<[SDTCisVT<0, i64>, SDTCisVT<1, i64>]>;
 def callseq_end : SDNode<"ISD::CALLSEQ_END", SDT_CallSeqEnd, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
-let Defs = [R0], Uses = [R0], hasSideEffects = 1, isCodeGenOnly = 1 in {
+let Defs = [R0], Uses = [R0], hasSideEffects = 1 in {
   def ADJCALLSTACKDOWN : AltairXPseudo<
     (outs),
     (ins i64imm:$amt1, i64imm:$amt2),
@@ -342,10 +357,6 @@ defm Sub : ALUInst<"sub", OPCODE_SUB, sub>;
 defm Xor : ALUInst<"xor", OPCODE_XOR, xor>;
 defm Or  : ALUInst<"or",  OPCODE_OR,  or>;
 defm And : ALUInst<"and", OPCODE_AND, and>;
-
-def shiftAmount : Operand<i64> {
-  let EncoderMethod = "getImmOpValue";
-}
 
 // Shifts always use 64-bits right operands
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
@@ -1204,6 +1215,20 @@ def BitcastIdToFs : BitcastInst<GPIReg32, FReg32>;
 def BitcastFdToIq : BitcastInst<FReg64, GPIReg64>;
 def BitcastFsToId : BitcastInst<FReg32, GPIReg32>;
 
+// take the address of the va_list
+// output address of the next argument into a register.
+def SDT_AltairXvaarg : SDTypeProfile<1, -1,
+  [SDTCisPtrTy<0>, SDTCisPtrTy<1>, SDTCisVT<2, i64>, SDTCisVT<3, i8>, SDTCisVT<4, i64>]>;
+def AltairXvaarg : SDNode<"AltairXISD::VAARG", SDT_AltairXvaarg,
+  [SDNPHasChain, SDNPMayLoad, SDNPMayStore, SDNPMemOperand]>;
+
+let usesCustomInserter = 1, Defs = [FR] in
+def VAARG : AltairXPseudo<
+  (outs GPIReg64:$ptr),
+  (ins addrimmop:$ap, i64imm:$size, i8imm:$mode, i64imm:$align),
+  [(set GPIReg64:$ptr, (AltairXvaarg addrimm:$ap, timm:$size, timm:$mode, timm:$align))],
+  "vaarg $ptr, $ap, $size, $mode, $align"
+>;
 
 // Assembler aliases
 include "AltairXInstrAliases.td"
