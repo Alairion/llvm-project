@@ -1070,7 +1070,7 @@ def FCmpRRd : FCMPInstRR<2, "d", FReg64>;
 // - Less than (lt)
 // - Greater than predicate can be matched by swapping the compared values: (a > b) -> (b < a)
 // Greater or equal, less than or equal, need an additional xor or setne, this is done during ISelLowering
-// Comparison is only ordered
+// Comparison is only valid for ordered values.
 def SDT_AltairXfscmp : SDTypeProfile<1, 3, [SDTCisVT<0, i8>, SDTCisFP<1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i32>]>;
 def AltairXfscmp : SDNode<"AltairXISD::FSCMP", SDT_AltairXfscmp, []>;
 

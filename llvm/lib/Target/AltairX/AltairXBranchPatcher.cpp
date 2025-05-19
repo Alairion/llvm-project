@@ -102,14 +102,14 @@ BRCOperands analysePseudoBRC(ISD::CondCode value) {
   switch (value) {
   case ISD::SETOEQ:
     return {AltairX::BRCondCode::EQ, false};
-  case ISD::SETOGT:
-    return {AltairX::BRCondCode::LT, true};
+  case ISD::SETOGT: // use "unsigned" version even for ordered comparisons
+    return {AltairX::BRCondCode::LTU, true};
   case ISD::SETOGE:
-    return {AltairX::BRCondCode::GE, false};
+    return {AltairX::BRCondCode::GEU, false};
   case ISD::SETOLT:
-    return {AltairX::BRCondCode::LT, false};
+    return {AltairX::BRCondCode::LTU, false};
   case ISD::SETOLE:
-    return {AltairX::BRCondCode::GE, true};
+    return {AltairX::BRCondCode::GEU, true};
   case ISD::SETONE:
     return {AltairX::BRCondCode::NE, false};
   case ISD::SETO: // AXIMPR: support NaN properly
