@@ -155,16 +155,15 @@ def OPCODE_FADD  : AltairXOpcodeFPU<0b0000>;
 def OPCODE_FSUB  : AltairXOpcodeFPU<0b1000>;
 def OPCODE_FMUL  : AltairXOpcodeFPU<0b0100>;
 def OPCODE_FNMUL : AltairXOpcodeFPU<0b1100>;
+def OPCODE_FMIN  : AltairXOpcodeFPU<0b0010>;
+def OPCODE_FMAX  : AltairXOpcodeFPU<0b1010>;
+def OPCODE_FNEG  : AltairXOpcodeFPU<0b0110>;
+def OPCODE_FABS  : AltairXOpcodeFPU<0b1110>;
 
 def OPCODE_FCMOVE : AltairXOpcodeFPU<0b0001>;
 def OPCODE_FSE    : AltairXOpcodeFPU<0b1001>;
 def OPCODE_FSEN   : AltairXOpcodeFPU<0b0101>;
 def OPCODE_FSLT   : AltairXOpcodeFPU<0b1101>;
-
-def OPCODE_FNEG : AltairXOpcodeFPU<0b0001>;
-def OPCODE_FABS : AltairXOpcodeFPU<0b1001>;
-def OPCODE_FMIN : AltairXOpcodeFPU<0b0101>;
-def OPCODE_FMAX : AltairXOpcodeFPU<0b1101>;
 
 def OPCODE_FMOVE  : AltairXOpcodeFPU<0b0011>;
 def OPCODE_FCMP   : AltairXOpcodeFPU<0b1011>;
