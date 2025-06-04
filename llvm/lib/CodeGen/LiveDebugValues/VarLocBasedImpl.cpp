@@ -1764,8 +1764,6 @@ void VarLocBasedLDV::transferSpillOrRestoreInst(MachineInstr &MI,
   Register Reg;
   std::optional<VarLoc::SpillLoc> Loc;
 
-  LLVM_DEBUG(dbgs() << "Examining instruction: "; MI.dump(););
-
   // First, if there are any DBG_VALUEs pointing at a spill slot that is
   // written to, then close the variable location. The value in memory
   // will have changed.
@@ -2012,6 +2010,7 @@ void VarLocBasedLDV::process(MachineInstr &MI, OpenRangesSet &OpenRanges,
                              RegDefToInstMap &RegSetInstrs) {
   if (!MI.isDebugInstr())
     LastNonDbgMI = &MI;
+  LLVM_DEBUG(dbgs() << "Examining instruction: "; MI.dump(););
   transferDebugValue(MI, OpenRanges, VarLocIDs, EntryValTransfers,
                      RegSetInstrs);
   transferRegisterDef(MI, OpenRanges, VarLocIDs, EntryValTransfers,

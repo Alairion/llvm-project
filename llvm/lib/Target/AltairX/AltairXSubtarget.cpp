@@ -31,9 +31,9 @@ using namespace llvm;
 AltairXSubtarget::AltairXSubtarget(const Triple &TT, StringRef CPU,
                                    StringRef FS, StringRef TuneCPU,
                                    const TargetMachine &TM)
-    : AltairXGenSubtargetInfo(TT, CPU, TuneCPU, FS), TSInfo(),
+    : AltairXGenSubtargetInfo(TT, CPU, TuneCPU, FS),
       InstrInfo(initializeSubtargetDependencies(TT, CPU, FS, TuneCPU, TM)),
-      FrameLowering(*this), TLInfo(TM, *this), RegInfo(*this) {}
+      FrameLowering(*this), RegInfo(*this), TLInfo(TM, *this), TSInfo() {}
 
 AltairXSubtarget &AltairXSubtarget::initializeSubtargetDependencies(
     const Triple &TT, StringRef CPU, StringRef FS, StringRef TuneCPU,

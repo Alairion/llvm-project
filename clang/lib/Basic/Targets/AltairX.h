@@ -21,8 +21,6 @@ namespace clang {
 namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY AltairXTargetInfo : public TargetInfo {
-  static const char *const GCCRegNames[];
-
 public:
   AltairXTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
     : TargetInfo(Triple) {
@@ -62,10 +60,10 @@ public:
 
   ArrayRef<Builtin::Info> getTargetBuiltins() const override { return {}; }
 
-  bool validateAsmConstraint(const char *&Name,
-                             TargetInfo::ConstraintInfo &info) const override {
-    return false;
-  }
+  bool validateAsmConstraint(const char*& Name,
+    TargetInfo::ConstraintInfo& info) const override;
+
+  std::string convertConstraint(const char*& Constraint) const override;
 
   std::string_view getClobbers() const override {
     return "";

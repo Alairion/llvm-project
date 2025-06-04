@@ -28,11 +28,11 @@ namespace llvm {
 
 class AltairXSubtarget : public AltairXGenSubtargetInfo {
 protected:
-  AltairXSelectionDAGInfo TSInfo;
   AltairXInstrInfo InstrInfo;
-  AltairXFrameLowering FrameLowering;
-  AltairXTargetLowering TLInfo;
   AltairXRegisterInfo RegInfo;
+  AltairXFrameLowering FrameLowering;
+  AltairXTargetLowering TLInfo; // must be here because it accesses previous members...
+  AltairXSelectionDAGInfo TSInfo;
 
 public:
   /// This constructor initializes the data members to match that

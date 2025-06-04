@@ -40,14 +40,27 @@ private:
   void expandPostRAIndirectCall(MachineInstr &inst) const;
   void expandPostRAIndirectJump(MachineInstr &inst) const;
   void expandPostRAConstantToReg(MachineInstr &inst) const;
+
   // All bitcasts can be handled with add + fmove
   // Caller must provide the right opcodes for the register class in use
-  void makeBitcastToFloat(MachineInstr &inst, uint32_t add,
-                          uint32_t fmove) const;
-  void makeBitcastToInt(MachineInstr &inst, uint32_t add, uint32_t fmove) const;
-  void expandPostRABitcast(MachineInstr& inst) const;
+  void makeBitcastToFloat(MachineInstr &inst, Register dest, Register src,
+                          uint32_t add, uint32_t fmove) const;
+  void makeBitcastToInt(MachineInstr &inst, Register dest, Register src,
+                        uint32_t add, uint32_t fmove) const;
+  void expandPostRABitcast(MachineInstr &inst) const;
 
 public:
+  // Ensure that inst can read `reg` value from its accumulator (r56)
+  // Returns an instruction located right before `inst`
+  // that put `reg` into the accumulator of `inst` unit
+  // `opcode` is the "move" instruction, it should be AddRI for ints, and FMove for floats.
+  MachineInstr *ensureInAccumulator(MachineInstr &inst, Register reg, uint32_t opcode,
+                                    bool addZero) const;
+
+  // Ensure that inst can read `reg` value from `bypass`
+  MachineInstr* ensureFromAccumulator(MachineInstr& inst, Register reg, Register bypass, uint32_t opcode,
+    bool addZero);
+
   void storeRegToStackSlot(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MI, Register SrcReg,
                            bool isKill, int FrameIndex,
@@ -90,7 +103,12 @@ public:
 
   static bool isCondBranchOpcode(const MachineInstr &inst) {
     return inst.getOpcode() == AltairX::BRC ||
-           inst.getOpcode() == AltairX::PseudoBRC;
+           inst.getOpcode() == AltairX::BRCb ||
+           inst.getOpcode() == AltairX::BRCw ||
+           inst.getOpcode() == AltairX::BRCd ||
+           inst.getOpcode() == AltairX::BRCq ||
+           inst.getOpcode() == AltairX::FBRCs ||
+           inst.getOpcode() == AltairX::FBRCd;
   }
 
   static bool isCmp(const MachineInstr &inst) {
