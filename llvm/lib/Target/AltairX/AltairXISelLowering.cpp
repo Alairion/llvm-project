@@ -77,8 +77,12 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent);
 
-  // loadext f64 from f32 is not natively supported
+  // loadext/storetrunc f64 from/to f32 is not natively supported
   setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, LegalizeAction::Expand);
+  setTruncStoreAction(MVT::f64, MVT::f32, LegalizeAction::Expand);
+
+  // We cannot match this directly
+  setCondCodeAction({ISD::SETO, ISD::SETUO}, AllFloatsMVT, LegalizeAction::Expand);
 
   // Constants
   setOperationAction(ISD::Constant, AllIntsMVT, LegalizeAction::Legal);
@@ -227,12 +231,16 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AltairXISD::Cmp";
   case AltairXISD::FCMP:
     return "AltairXISD::FCmp";
-  case AltairXISD::BRCOND:
-    return "AltairXISD::BRCond";
+  case AltairXISD::BRC:
+    return "AltairXISD::BRC";
+  case AltairXISD::SCMP:
+    return "AltairXISD::SCmp";
   case AltairXISD::SBIT:
     return "AltairXISD::SBit";
   case AltairXISD::CMOVE:
     return "AltairXISD::CMove";
+  case AltairXISD::FSCMP:
+    return "AltairXISD::FSCmp";
   case AltairXISD::FCMOVE:
     return "AltairXISD::CMove";
   case AltairXISD::GAWRAPPER:
@@ -246,6 +254,27 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
   default:
     return nullptr;
   }
+}
+
+std::pair<unsigned, const TargetRegisterClass *>
+AltairXTargetLowering::getRegForInlineAsmConstraint(
+    const TargetRegisterInfo *RegInfo, StringRef Constraint, MVT VT) const {
+  if(Constraint[0] == 'r') {
+    switch (VT.SimpleTy) {
+    case MVT::i8:
+      return std::make_pair(0U, &AltairX::GPIReg8RegClass);
+    case MVT::i16:
+      return std::make_pair(0U, &AltairX::GPIReg16RegClass);
+    case MVT::i32:
+      return std::make_pair(0U, &AltairX::GPIReg32RegClass);
+    case MVT::i64:
+      return std::make_pair(0U, &AltairX::GPIReg64RegClass);
+    default:
+      break;
+    }
+  }
+
+  return TargetLowering::getRegForInlineAsmConstraint(RegInfo, Constraint, VT);
 }
 
 namespace {
@@ -317,7 +346,7 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
     SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
-  assert(CallConv == CallingConv::C &&
+  assert((CallConv == CallingConv::C || CallConv == CallingConv::Fast) &&
          "Unsupported CallingConv to FORMAL_ARGS");
 
   MachineFunction &MF = DAG.getMachineFunction();
@@ -328,7 +357,6 @@ SDValue AltairXTargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(Ins, AltairX_CCallingConv);
 
   // Used with varargs to acumulate store chains.
-  // AXIMPR: floats are not supported
   std::vector<SDValue> outChains;
   if (IsVarArg && MF.getFrameInfo().hasVAStart()) {
     constexpr int64_t slotSize = 8; // all args are in 8 bytes slots
@@ -779,15 +807,14 @@ MachineBasicBlock *AltairXTargetLowering::EmitVAARGWithCustomInserter(
   Register maxOffsetReg = regInfo.createVirtualRegister(addrRegClass);
   BuildMI(MBB, metadata, instInfo.get(AltairX::ConstantToRegq), maxOffsetReg)
     .addImm(maxOffset + slotSize - alignedArgSize);
-  BuildMI(MBB, metadata, instInfo.get(AltairX::CmpRRq))
-    .addReg(offsetReg)
-    .addReg(maxOffsetReg);
 
   // Branch to "overflowMBB" if offset >= max
   // Fall through to "offsetMBB" otherwise
-  BuildMI(MBB, metadata, instInfo.get(AltairX::PseudoBRC))
+  BuildMI(MBB, metadata, instInfo.get(AltairX::BRCq))
       .addMBB(overflowMBB)
-      .addImm(static_cast<int64_t>(ISD::CondCode::SETUGE));
+      .addImm(static_cast<int64_t>(ISD::CondCode::SETUGE))
+      .addReg(offsetReg)
+      .addReg(maxOffsetReg);
 
   // Read the reg_save_area address.
   Register regSaveReg = regInfo.createVirtualRegister(addrRegClass);
@@ -1237,7 +1264,7 @@ SDValue AltairXTargetLowering::LowerSELECT(SDValue Op,
   SDValue tval = Op.getOperand(1);
   SDValue fval = Op.getOperand(2);
 
-  const auto type = tval.getValueType();
+  const auto type = Op.getValueType();
   // left must not be constant!
   SDValue realLeft = promoteConstant(DAG, dl, fval);
 
@@ -1257,7 +1284,8 @@ SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
   const ISD::CondCode cc = cast<CondCodeSDNode>(Op.getOperand(4))->get();
 
   SDLoc dl{Op};
-  const auto type = right.getValueType();
+  const auto cmptype = left.getValueType();
+  const auto outtype = tval.getValueType();
 
   auto [setccOps, cmoveOps] =
       computeSelectCCOperands(left, right, tval, fval, cc);
@@ -1267,17 +1295,23 @@ SDValue AltairXTargetLowering::LowerSELECT_CC(SDValue Op,
   SDValue ccval =
       DAG.getConstant(static_cast<uint64_t>(setccOps.cc), dl, MVT::i32);
 
-  if (type.isFloatingPoint()) {
-    SDValue setcc = DAG.getNode(AltairXISD::FSCMP, dl, MVT::i8, realLeft,
-                                setccOps.right, ccval);
+  SDValue setcc;
+  if (cmptype.isFloatingPoint()) {
+    setcc = DAG.getNode(AltairXISD::FSCMP, dl, MVT::i8, realLeft,
+                        setccOps.right, ccval);
+  } else {
+    setcc = DAG.getNode(AltairXISD::SCMP, dl, MVT::i8, realLeft, setccOps.right,
+                        ccval);
+  }
+
+  if (outtype.isFloatingPoint()) {
     return DAG.getNode(AltairXISD::FCMOVE, dl, Op.getValueType(),
                        cmoveOps.falseVal, setcc, cmoveOps.trueVal);
   }
 
-  SDValue setcc = DAG.getNode(AltairXISD::SCMP, dl, MVT::i8, realLeft,
-                              setccOps.right, ccval);
   return DAG.getNode(AltairXISD::CMOVE, dl, Op.getValueType(),
                      cmoveOps.falseVal, setcc, cmoveOps.trueVal);
+
 }
 
 SDValue AltairXTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
@@ -1288,20 +1322,13 @@ SDValue AltairXTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   SDValue dest = Op.getOperand(4);
 
   SDLoc dl{Op};
-  const auto type = right.getValueType();
+  const auto type = left.getValueType();
 
-  SDValue cmp;
-  if (type.isFloatingPoint()) {
-    cmp = DAG.getNode(AltairXISD::FCMP, dl, type, left, right);
-  } else {
-    cmp = DAG.getNode(AltairXISD::CMP, dl, type, left, right);
-  }
-
-  // BRCOND becomes PseudoBRC that supports all predicates
+  // BRC becomes [F]BRC[size] that supports all predicates
   // It is expanded by AltairXBranchPatcher pass
   auto ccval = DAG.getConstant(cc, dl, MVT::i32);
-  return DAG.getNode(AltairXISD::BRCOND, dl, MVT::Other, chain, dest, ccval,
-                     cmp);
+  return DAG.getNode(AltairXISD::BRC, dl, MVT::Other, chain, dest, ccval,
+    left, right);
 }
 
 SDValue AltairXTargetLowering::LowerBRIND(SDValue Op, SelectionDAG &DAG) const {

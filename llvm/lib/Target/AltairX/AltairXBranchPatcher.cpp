@@ -86,63 +86,80 @@ void AltairXBranchPatcher::runOnMachineBasicBlock(MachineBasicBlock &block) {
 
 namespace {
 
-template <typename It> // It::value_type compatible with const machineInstr&
-auto findNearestCmp(It begin, It end) {
-  return std::find_if(begin, end, AltairXInstrInfo::isAnyCmp);
-}
-
 struct BRCOperands {
-  // for brc
   AltairX::BRCondCode cc{};
-  // for cmp
-  bool swapCMPOperands{};
+  const MachineOperand& left;
+  const MachineOperand& right;
 };
 
-BRCOperands analysePseudoBRC(ISD::CondCode value) {
+BRCOperands analysePseudoBRC(ISD::CondCode value, const MachineOperand& left, const MachineOperand& right) {
   switch (value) {
   case ISD::SETOEQ:
-    return {AltairX::BRCondCode::EQ, false};
-  case ISD::SETOGT: // use "unsigned" version even for ordered comparisons
-    return {AltairX::BRCondCode::LTU, true};
+    return {AltairX::BRCondCode::EQ, left, right};
+  case ISD::SETOGT:
+    return {AltairX::BRCondCode::LT, right, left};
   case ISD::SETOGE:
-    return {AltairX::BRCondCode::GEU, false};
+    return {AltairX::BRCondCode::GE, left, right};
   case ISD::SETOLT:
-    return {AltairX::BRCondCode::LTU, false};
+    return {AltairX::BRCondCode::LT, left, right};
   case ISD::SETOLE:
-    return {AltairX::BRCondCode::GEU, true};
+    return {AltairX::BRCondCode::GE, right, left};
   case ISD::SETONE:
-    return {AltairX::BRCondCode::NE, false};
+    return {AltairX::BRCondCode::NE, left, right};
   case ISD::SETO: // AXIMPR: support NaN properly
-    return {AltairX::BRCondCode::EQ, false};
+    //return {AltairX::BRCondCode::EQ, left, right};
+    llvm_unreachable("ISD::SETO is not supported!");
   case ISD::SETUO: // AXIMPR: support NaN properly
-    return {AltairX::BRCondCode::NE, false};
+    //return {AltairX::BRCondCode::NE, left, right};
+    llvm_unreachable("ISD::SETUO is not supported!");
   case ISD::SETUEQ:
-    return {AltairX::BRCondCode::EQ, false};
+    return {AltairX::BRCondCode::EQ, left, right};
   case ISD::SETUGT:
-    return {AltairX::BRCondCode::LTU, true};
+    return {AltairX::BRCondCode::LTU, right, left};
   case ISD::SETUGE:
-    return {AltairX::BRCondCode::GEU, false};
+    return {AltairX::BRCondCode::GEU, left, right};
   case ISD::SETULT:
-    return {AltairX::BRCondCode::LTU, false};
+    return {AltairX::BRCondCode::LTU, left, right};
   case ISD::SETULE:
-    return {AltairX::BRCondCode::GEU, true};
+    return {AltairX::BRCondCode::GEU, right, left};
   case ISD::SETUNE:
-    return {AltairX::BRCondCode::NE, false};
+    return {AltairX::BRCondCode::NE, left, right};
   case ISD::SETEQ:
-    return {AltairX::BRCondCode::EQ, false};
+    return {AltairX::BRCondCode::EQ, left, right};
   case ISD::SETGT:
-    return {AltairX::BRCondCode::LT, true};
+    return {AltairX::BRCondCode::LT, right, left};
   case ISD::SETGE:
-    return {AltairX::BRCondCode::GE, false};
+    return {AltairX::BRCondCode::GE, left, right};
   case ISD::SETLT:
-    return {AltairX::BRCondCode::LT, false};
+    return {AltairX::BRCondCode::LT, left, right};
   case ISD::SETLE:
-    return {AltairX::BRCondCode::GE, true};
+    return {AltairX::BRCondCode::GE, right, left};
   case ISD::SETNE:
-    return {AltairX::BRCondCode::NE, false};
+    return {AltairX::BRCondCode::NE, left, right};
   default:
     llvm_unreachable("Unsupported ISD::CondCode");
     break;
+  }
+}
+
+uint32_t getCmpOpcodeForBRC(const MachineInstr& brc)
+{
+  switch(brc.getOpcode())
+  {
+  case AltairX::BRCb:
+    return AltairX::CmpRRb;
+  case AltairX::BRCw:
+    return AltairX::CmpRRw;
+  case AltairX::BRCd:
+    return AltairX::CmpRRd;
+  case AltairX::BRCq:
+    return AltairX::CmpRRq;
+  case AltairX::FBRCs:
+    return AltairX::FCmpRRs;
+  case AltairX::FBRCd:
+    return AltairX::FCmpRRd;
+  default:
+    llvm_unreachable("Must be a BRC!");
   }
 }
 
@@ -150,34 +167,28 @@ BRCOperands analysePseudoBRC(ISD::CondCode value) {
 
 void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &block,
                                           MachineInstr &inst) {
-  const auto cc = static_cast<ISD::CondCode>(inst.getOperand(1).getImm());
-  const auto [nativeCC, swapCMPOps] = analysePseudoBRC(cc);
-
-  auto rend = block.rend().getInstrIterator();
-  auto cmpIt = findNearestCmp(inst.getIterator().getReverse(), rend);
-  assert(cmpIt != rend && "BRC without CMP");
-  MachineInstr *cmpInst = to_address(cmpIt);
-
   // if right operand is already an imm, throw error
-  if(cmpInst->getOperand(1).isImm()) {
-    llvm_unreachable("Please use ConstantToReg + CmpRR in codegen!");
+  if(inst.getOperand(3).isImm()) {
+    llvm_unreachable("Please use ConstantToReg + BRC in codegen!");
     return;
   }
 
-  if (swapCMPOps) {
-    auto *newCmp = BuildMI(block, *cmpInst, cmpInst->getDebugLoc(),
-                           instInfo->get(cmpInst->getOpcode()))
-                       .addReg(cmpInst->getOperand(1).getReg())
-                       .addReg(cmpInst->getOperand(0).getReg())
-                       .getInstr();
-    cmpInst->eraseFromParent();
-    cmpInst = newCmp;
-  }
+  const DebugLoc dl{inst.getDebugLoc()};
+  const auto cc = static_cast<ISD::CondCode>(inst.getOperand(1).getImm());
+  const auto&& [nativeCC, left, right] =
+      analysePseudoBRC(cc, inst.getOperand(2), inst.getOperand(3));
+  const uint32_t cmpOpcode = getCmpOpcodeForBRC(inst);
 
-  if (AltairXInstrInfo::isFCmp(*cmpInst)) {
-    runOnFCmp(block, *cmpInst);
+  // Creates a reg-reg cmp by default, runOn[F]Cmp will optimize it if possible
+  MachineInstr *cmp = BuildMI(block, inst, dl, instInfo->get(cmpOpcode))
+                          .addReg(left.getReg())
+                          .addReg(right.getReg())
+                          .getInstr();
+
+  if (AltairXInstrInfo::isFCmp(*cmp)) {
+    runOnFCmp(block, *cmp);
   } else {
-    runOnCmp(block, *cmpInst);
+    runOnCmp(block, *cmp);
   }
 
   auto *target = inst.getOperand(0).getMBB();
@@ -186,7 +197,7 @@ void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &block,
   const bool likely =
       probability.getNumerator() >= probability.getDenominator() / 2u;
 
-  BuildMI(block, inst, inst.getDebugLoc(), instInfo->get(AltairX::BRC))
+  BuildMI(block, inst, dl, instInfo->get(AltairX::BRC))
       .addMBB(target)
       .addImm(static_cast<int64_t>(nativeCC))
       .addImm(static_cast<int64_t>(likely));
@@ -259,7 +270,7 @@ void AltairXBranchPatcher::runOnCmp(MachineBasicBlock &block,
 
 void AltairXBranchPatcher::runOnFCmp(MachineBasicBlock &block,
                                      MachineInstr &inst) {
-  // TODO: magic with fmovei and fcmpi, currently unsupported!
+  // AXIMPR: use fmovei and fcmpi
 }
 
 } // namespace llvm

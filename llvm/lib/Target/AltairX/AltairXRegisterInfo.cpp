@@ -85,7 +85,8 @@ bool AltairXRegisterInfo::isGPIReg(Register reg) {
 
 bool AltairXRegisterInfo::isFReg(Register reg) {
   return AltairX::FReg32RegClass.contains(reg) ||
-         AltairX::FReg64RegClass.contains(reg);
+         AltairX::FReg64RegClass.contains(reg) ||
+         AltairX::VIReg8RegClass.contains(reg);
 }
 
 bool AltairXRegisterInfo::isVIReg(Register reg) {
@@ -143,7 +144,9 @@ bool isReload(std::uint32_t opcode) {
       AltairX::LoadRIbZX64, AltairX::LoadRId,     AltairX::LoadRIdAX64,
       AltairX::LoadRIdZX64, AltairX::LoadRIq,     AltairX::LoadRIw,
       AltairX::LoadRIwAX32, AltairX::LoadRIwAX64, AltairX::LoadRIwZX32,
-      AltairX::LoadRIwZX64, AltairX::FLoadRIs,    AltairX::FLoadRId};
+      AltairX::LoadRIwZX64, AltairX::LoadSExtRIb, AltairX::LoadSExtRId,
+      AltairX::LoadSExtRIw, AltairX::LoadSExtRRb, AltairX::LoadSExtRRd,
+      AltairX::LoadSExtRRw, AltairX::FLoadRIs,    AltairX::FLoadRId};
 
   return std::find(validOpcodes.begin(), validOpcodes.end(), opcode) !=
          validOpcodes.end();
@@ -181,6 +184,7 @@ void replaceFrameIndex(MachineBasicBlock::iterator II,
         .addReg(FrameReg, 0)
         .addImm(Offset);
   } else {
+    LLVM_DEBUG(inst.dump());
     llvm_unreachable("Unsupported Instruction for frame index elemination");
   }
 

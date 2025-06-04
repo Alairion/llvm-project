@@ -34,7 +34,7 @@ enum NodeType {
   INDIRECT_BRA,
   CMP,
   FCMP,
-  BRCOND,
+  BRC,
   SCMP,
   SBIT,
   CMOVE,
@@ -57,6 +57,10 @@ public:
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
   const char *getTargetNodeName(unsigned Opcode) const override;
+
+  std::pair<unsigned, const TargetRegisterClass *>
+  getRegForInlineAsmConstraint(const TargetRegisterInfo *RI,
+                               StringRef Constraint, MVT VT) const override;
 
 protected:
   // Subtarget Info

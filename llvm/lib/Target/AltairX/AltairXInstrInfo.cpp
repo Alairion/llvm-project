@@ -60,6 +60,8 @@ uint32_t getFRegCopy(MCRegister reg) {
     return AltairX::FMoveRd;
   } else if (AltairX::FReg32RegClass.contains(reg)) {
     return AltairX::FMoveRs;
+  } else if (AltairX::VIReg8RegClass.contains(reg)) {
+    return AltairX::VIMoveRb;
   }
 
   llvm_unreachable("Wrong register class");
@@ -161,7 +163,6 @@ uint32_t getBitcastAdd(MCRegister reg) {
 }
 
 uint32_t getBitcastFMove(MCRegister reg) {
-
   if (AltairX::FReg64RegClass.contains(reg)) {
     return AltairX::FMoveRd;
   } else if (AltairX::FReg32RegClass.contains(reg)) {
@@ -189,9 +190,11 @@ void AltairXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MI, DL, get(getFRegCopy(DestReg)), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc));
   } else if (Info::isGPIReg(DestReg) && Info::isVIReg(SrcReg)) { // bitcast
-    makeBitcastToInt(*MI, getBitcastAdd(DestReg), getBitcastFMove(SrcReg));
+    makeBitcastToInt(*MI, DestReg, SrcReg, getBitcastAdd(DestReg),
+                     getBitcastFMove(SrcReg));
   } else if (Info::isVIReg(DestReg) && Info::isGPIReg(SrcReg)) { // bitcast
-    makeBitcastToFloat(*MI, getBitcastAdd(SrcReg), getBitcastFMove(DestReg));
+    makeBitcastToFloat(*MI, DestReg, SrcReg, getBitcastAdd(SrcReg),
+                       getBitcastFMove(DestReg));
   } else {
     // Special registers moves (EF, RI, ...)
     BuildMI(MBB, MI, DL, get(getSpecialRegCopyOpcode(DestReg, SrcReg)), DestReg)
@@ -469,35 +472,51 @@ static bool isNoop(const MachineInstr& inst)
 
 }
 
-void AltairXInstrInfo::makeBitcastToFloat(MachineInstr &inst, uint32_t add,
+MachineInstr *llvm::AltairXInstrInfo::ensureInAccumulator(MachineInstr &inst,
+                                                          Register reg,
+                                                          uint32_t opcode,
+                                                          bool addZero) const {
+  const llvm::TargetRegisterInfo* regInfo = this->Subtarget.getRegisterInfo();
+  MachineBasicBlock& block = *inst.getParent();
+
+  // If previous instruction defines the source register, a copy of the value
+  // will be in the accumulator, so no additional operation is required.
+  const MachineBasicBlock::iterator it = inst.getIterator();
+  if(it != block.getFirstNonDebugInstr()) {
+    const auto previous = llvm::prev_nodbg(it, block.begin());
+    if(previous->findRegisterDefOperandIdx(reg, regInfo, false, true) != -1) {
+      return llvm::to_address(previous);
+    }
+  }
+
+  const DebugLoc dl{inst.getDebugLoc()};
+  auto builder = BuildMI(block, inst, dl, get(opcode), AltairX::R56).addReg(reg);
+  if (addZero) {
+    builder.addImm(0);
+  }
+
+  return builder.getInstr();
+}
+
+void AltairXInstrInfo::makeBitcastToFloat(MachineInstr &inst, Register dest,
+                                          Register src, uint32_t add,
                                           uint32_t fmove) const {
   MachineBasicBlock &block = *inst.getParent();
   DebugLoc dl{inst.getDebugLoc()};
   const llvm::TargetRegisterInfo *regInfo = this->Subtarget.getRegisterInfo();
 
-  const Register destReg = inst.getOperand(0).getReg();
-  const Register srcReg = inst.getOperand(1).getReg();
+  // Bitcast is done through accumulators
+  ensureInAccumulator(inst, src, add, true);
 
-  // If previous instruction defines the source register, a copy of the value
-  // will be in the accumulator, so no additional operation is required.
-  auto it = inst.getIterator();
-  if (it != block.getFirstNonDebugInstr()) {
-    const auto previous = std::prev(it);
-    if (previous->findRegisterDefOperandIdx(srcReg, regInfo, false, true) != -1) {
-      BuildMI(block, inst, dl, get(add), AltairX::R56)
-        .addReg(srcReg).addImm(0);
-    }
-  } else {
-    BuildMI(block, inst, dl, get(add), AltairX::R56).addReg(srcReg).addImm(0);
-  }
+  const MachineBasicBlock::iterator it = inst.getIterator();
 
   // If next instruction kills the destination register
   // use the bypass directly
   if (it != block.getLastNonDebugInstr()) {
     const auto next = std::next(it);
-    if (!isNoop(*next) && next->killsRegister(destReg, regInfo)) {
+    if (!isNoop(*next) && next->killsRegister(dest, regInfo)) {
       for (auto &op : next->operands()) {
-        if (op.isReg() && !op.isDef() && op.getReg() == destReg) {
+        if (op.isReg() && !op.isDef() && op.getReg() == dest) {
           op.setReg(AltairX::R57);
         }
       }
@@ -507,38 +526,28 @@ void AltairXInstrInfo::makeBitcastToFloat(MachineInstr &inst, uint32_t add,
   }
 
   // Else use an add to move the acc to a register
-  BuildMI(block, inst, dl, get(fmove), destReg)
+  BuildMI(block, inst, dl, get(fmove), dest)
       .addReg(AltairX::R57, getKillRegState(true));
 }
 
-void AltairXInstrInfo::makeBitcastToInt(MachineInstr &inst, uint32_t add,
+void AltairXInstrInfo::makeBitcastToInt(MachineInstr &inst, Register dest,
+                                        Register src, uint32_t add,
                                         uint32_t fmove) const {
   MachineBasicBlock &block = *inst.getParent();
   DebugLoc dl{inst.getDebugLoc()};
   const llvm::TargetRegisterInfo *regInfo = this->Subtarget.getRegisterInfo();
 
-  const Register destReg = inst.getOperand(0).getReg();
-  const Register srcReg = inst.getOperand(1).getReg();
+  // Bitcast is done through accumulators
+  ensureInAccumulator(inst, src, fmove, false);
 
-  // If previous instruction defines the source register, a copy of the value
-  // will be in the accumulator, so no additional operation is required.
-  const auto it = inst.getIterator();
-  if (it->getOpcode() != AltairX::KILL && it != block.getFirstNonDebugInstr()) {
-    const auto previous = std::prev(it);
-    if (previous->findRegisterDefOperandIdx(srcReg, regInfo, false, true) != -1) {
-      BuildMI(block, inst, dl, get(fmove), AltairX::R56).addReg(srcReg);
-    }
-  } else {
-    BuildMI(block, inst, dl, get(fmove), AltairX::R56).addReg(srcReg);
-  }
-
+  const MachineBasicBlock::iterator it = inst.getIterator();
   // If next instruction kills the destination register
   // use the bypass directly
   if (it != block.getLastNonDebugInstr()) {
     const auto next = std::next(it);
-    if (!isNoop(*next) && next->killsRegister(destReg, regInfo)) {
+    if (!isNoop(*next) && next->killsRegister(dest, regInfo)) {
       for (auto &op : next->operands()) {
-        if (op.isReg() && !op.isDef() && op.getReg() == destReg) {
+        if (op.isReg() && !op.isDef() && op.getReg() == dest) {
           op.setReg(AltairX::R59);
         }
       }
@@ -548,25 +557,27 @@ void AltairXInstrInfo::makeBitcastToInt(MachineInstr &inst, uint32_t add,
   }
 
   // Else use an add to move the acc to a register
-  BuildMI(block, inst, dl, get(add), destReg)
+  BuildMI(block, inst, dl, get(add), dest)
       .addReg(AltairX::R59, getKillRegState(true))
       .addImm(0);
 }
 
 void AltairXInstrInfo::expandPostRABitcast(MachineInstr &inst) const {
+  const Register dest = inst.getOperand(0).getReg();
+  const Register src = inst.getOperand(1).getReg();
   switch(inst.getOpcode())
   {
   case AltairX::BitcastIdToFs:
-    makeBitcastToFloat(inst, AltairX::AddRId, AltairX::FMoveRs);
+    makeBitcastToFloat(inst, dest, src, AltairX::AddRId, AltairX::FMoveRs);
     break;
   case AltairX::BitcastIqToFd:
-    makeBitcastToFloat(inst, AltairX::AddRIq, AltairX::FMoveRd);
+    makeBitcastToFloat(inst, dest, src, AltairX::AddRIq, AltairX::FMoveRd);
     break;
   case AltairX::BitcastFsToId:
-    makeBitcastToInt(inst, AltairX::AddRId, AltairX::FMoveRs);
+    makeBitcastToInt(inst, dest, src, AltairX::AddRId, AltairX::FMoveRs);
     break;
   case AltairX::BitcastFdToIq:
-    makeBitcastToInt(inst, AltairX::AddRIq, AltairX::FMoveRd);
+    makeBitcastToInt(inst, dest, src, AltairX::AddRIq, AltairX::FMoveRd);
     break;
   default:
     llvm_unreachable("Unknown bitcast");
@@ -587,6 +598,13 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
     return false;
   }
 
+  const auto fillCond = [&Cond](MachineInstr& inst)
+  {
+    Cond.emplace_back(inst.getOperand(1));
+    Cond.emplace_back(inst.getOperand(2));
+    Cond.emplace_back(inst.getOperand(3));
+  };
+
   // If there is only one terminator instruction, process it.
   auto secondLast = std::prev(last);
   if (last == MBB.begin() || !isUnpredicatedTerminator(*secondLast)) {
@@ -598,7 +616,7 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
     if (isCondBranchOpcode(*last)) {
       // Block ends with fall-through condbranch.
       TBB = getBranchDestBlock(*last);
-      Cond.emplace_back(last->getOperand(1));
+      fillCond(*last);
       return false;
     }
 
@@ -636,7 +654,7 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
       if (isCondBranchOpcode(*last)) {
         // Block ends with fall-through condbranch.
         TBB = getBranchDestBlock(*last);
-        Cond.emplace_back(last->getOperand(1));
+        fillCond(*last);
         return false;
       }
 
@@ -647,7 +665,7 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   // If the block ends with a B and a Bcc, handle it.
   if (isCondBranchOpcode(*secondLast) && isUncondBranchOpcode(*last)) {
     TBB = getBranchDestBlock(*secondLast);
-    Cond.emplace_back(secondLast->getOperand(1));
+    fillCond(*secondLast);
     FBB = getBranchDestBlock(*last);
     return false;
   }
@@ -668,19 +686,29 @@ bool AltairXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
 
 bool AltairXInstrInfo::reverseBranchCondition(
     SmallVectorImpl<MachineOperand> &Cond) const {
-  assert(Cond.size() == 1 && "Expected from analyseBranch");
-  assert(Cond[0].getParent()->getOpcode() == AltairX::PseudoBRC &&
-         "AltairXInstrInfo::reverseBranchCondition only works with PseudoBRC!");
+  assert(Cond.size() == 3 && "Expected from analyseBranch");
+  assert(isCondBranchOpcode(*Cond[0].getParent()) &&
+         "AltairXInstrInfo::reverseBranchCondition only works with BRC!");
 
-  // AXIMPR: support NaN, also here we can probably do something more robust
   const auto cc = static_cast<ISD::CondCode>(Cond[0].getImm());
-  // These two condcodes are only valid for floats
-  if (cc == ISD::CondCode::SETO || cc == ISD::CondCode::SETUO) {
-    Cond[0].setImm(static_cast<int64_t>(
-        ISD::getSetCCInverse(cc, MVT::f64))); // any float type
-  } else {
+
+  switch (Cond[0].getParent()->getOpcode()) {
+  case AltairX::BRCb:
+    [[fallthrough]];
+  case AltairX::BRCw:
+    [[fallthrough]];
+  case AltairX::BRCd:
+    [[fallthrough]];
+  case AltairX::BRCq:
     Cond[0].setImm(static_cast<int64_t>(
         ISD::getSetCCInverse(cc, MVT::i64))); // any int type
+    break;
+  case AltairX::FBRCs:
+    [[fallthrough]];
+  case AltairX::FBRCd:
+    Cond[0].setImm(static_cast<int64_t>(
+        ISD::getSetCCInverse(cc, MVT::f64))); // any float type
+    break;
   }
 
   return false;
@@ -699,7 +727,10 @@ unsigned AltairXInstrInfo::removeBranch(MachineBasicBlock &MBB,
 
   // Remove the branch.
   last->eraseFromParent();
-  if (MBB.empty()) {
+  // We may have two branches with the first one being a conditional and the
+  // last a non conditional
+  last = MBB.getLastNonDebugInstr();
+  if (last == MBB.end()) { // nothing else in the block
     if (BytesRemoved) {
       *BytesRemoved = 4;
     }
@@ -707,9 +738,6 @@ unsigned AltairXInstrInfo::removeBranch(MachineBasicBlock &MBB,
     return 1;
   }
 
-  // We may have two branches with the first one being a conditional and the
-  // last a non conditional
-  last = MBB.getLastNonDebugInstr();
   if (!isCondBranchOpcode(*last)) {
     if (BytesRemoved) {
       *BytesRemoved = 4;
@@ -737,9 +765,11 @@ unsigned AltairXInstrInfo::insertBranch(
     if (Cond.empty()) { // Unconditional branch
       BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(TBB);
     } else {
-      BuildMI(&MBB, DL, get(AltairX::PseudoBRC))
+      BuildMI(&MBB, DL, get(Cond[0].getParent()->getOpcode()))
           .addMBB(TBB)
-          .addImm(Cond[0].getImm());
+          .addImm(Cond[0].getImm())
+          .add(Cond[1])
+          .add(Cond[2]);
     }
 
     if (BytesAdded) {
@@ -750,9 +780,11 @@ unsigned AltairXInstrInfo::insertBranch(
   }
 
   // Two-way conditional branch.
-  BuildMI(&MBB, DL, get(AltairX::PseudoBRC))
+  BuildMI(&MBB, DL, get(Cond[0].getParent()->getOpcode()))
       .addMBB(TBB)
-      .addImm(Cond[0].getImm());
+      .addImm(Cond[0].getImm())
+      .add(Cond[1])
+      .add(Cond[2]);
   BuildMI(&MBB, DL, get(AltairX::BRA)).addMBB(FBB);
   if (BytesAdded) {
     *BytesAdded = 8;
@@ -766,7 +798,17 @@ AltairXInstrInfo::getBranchDestBlock(const MachineInstr &inst) const {
   switch (inst.getOpcode()) {
   case AltairX::BRA:
     [[fallthrough]];
-  case AltairX::PseudoBRC:
+  case AltairX::BRCb:
+    [[fallthrough]];
+  case AltairX::BRCw:
+    [[fallthrough]];
+  case AltairX::BRCd:
+    [[fallthrough]];
+  case AltairX::BRCq:
+    [[fallthrough]];
+  case AltairX::FBRCs:
+    [[fallthrough]];
+  case AltairX::FBRCd:
     [[fallthrough]];
   case AltairX::BRC:
     return inst.getOperand(0).getMBB();

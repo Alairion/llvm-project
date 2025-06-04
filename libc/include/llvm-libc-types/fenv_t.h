@@ -29,6 +29,8 @@ typedef unsigned int fenv_t;
 typedef struct {
   unsigned int __fpc;
 } fenv_t;
+#elif defined(__ALTAIRX__)
+typedef unsigned int fenv_t;
 #else
 #error "fenv_t not defined for your platform"
 #endif
