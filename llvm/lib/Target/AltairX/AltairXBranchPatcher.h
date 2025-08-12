@@ -47,7 +47,7 @@ private:
   void runOnMachineBasicBlock(MachineBasicBlock &block);
   void runOnPseudoBRC(MachineBasicBlock &block, MachineInstr &inst);
   void runOnCmp(MachineBasicBlock &block, MachineInstr &inst);
-  void runOnFCmp(MachineBasicBlock& block, MachineInstr& inst);
+  void runOnFCmp(MachineBasicBlock &block, MachineInstr &inst);
 
   const TargetMachine *target{};
   const AltairXInstrInfo *instInfo{};

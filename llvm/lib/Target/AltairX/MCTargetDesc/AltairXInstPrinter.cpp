@@ -92,14 +92,18 @@ std::string_view condCodeToString(AltairX::BRCondCode condCode) {
     return "eq";
   case llvm::AltairX::BRCondCode::NE:
     return "ne";
-  case llvm::AltairX::BRCondCode::LTU:
-    return "ltu";
-  case llvm::AltairX::BRCondCode::GEU:
-    return "geu";
   case llvm::AltairX::BRCondCode::LT:
     return "lt";
   case llvm::AltairX::BRCondCode::GE:
     return "ge";
+  case llvm::AltairX::BRCondCode::EQU:
+    return "equ";
+  case llvm::AltairX::BRCondCode::NEU:
+    return "neu";
+  case llvm::AltairX::BRCondCode::LTU:
+    return "ltu";
+  case llvm::AltairX::BRCondCode::GEU:
+    return "geu";
   default:
     llvm_unreachable("Invalid AltairX::CondCode");
     break;

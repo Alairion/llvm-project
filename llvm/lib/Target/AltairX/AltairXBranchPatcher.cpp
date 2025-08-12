@@ -106,14 +106,12 @@ BRCOperands analysePseudoBRC(ISD::CondCode value, const MachineOperand& left, co
     return {AltairX::BRCondCode::GE, right, left};
   case ISD::SETONE:
     return {AltairX::BRCondCode::NE, left, right};
-  case ISD::SETO: // AXIMPR: support NaN properly
-    //return {AltairX::BRCondCode::EQ, left, right};
-    llvm_unreachable("ISD::SETO is not supported!");
-  case ISD::SETUO: // AXIMPR: support NaN properly
-    //return {AltairX::BRCondCode::NE, left, right};
-    llvm_unreachable("ISD::SETUO is not supported!");
+  case ISD::SETO:
+    llvm_unreachable("ISD::SETO must be lowered before!");
+  case ISD::SETUO:
+    llvm_unreachable("ISD::SETUO must be lowered before!");
   case ISD::SETUEQ:
-    return {AltairX::BRCondCode::EQ, left, right};
+    return {AltairX::BRCondCode::EQU, left, right};
   case ISD::SETUGT:
     return {AltairX::BRCondCode::LTU, right, left};
   case ISD::SETUGE:
@@ -123,7 +121,7 @@ BRCOperands analysePseudoBRC(ISD::CondCode value, const MachineOperand& left, co
   case ISD::SETULE:
     return {AltairX::BRCondCode::GEU, right, left};
   case ISD::SETUNE:
-    return {AltairX::BRCondCode::NE, left, right};
+    return {AltairX::BRCondCode::NEU, left, right};
   case ISD::SETEQ:
     return {AltairX::BRCondCode::EQ, left, right};
   case ISD::SETGT:
@@ -181,8 +179,8 @@ void AltairXBranchPatcher::runOnPseudoBRC(MachineBasicBlock &block,
 
   // Creates a reg-reg cmp by default, runOn[F]Cmp will optimize it if possible
   MachineInstr *cmp = BuildMI(block, inst, dl, instInfo->get(cmpOpcode))
-                          .addReg(left.getReg())
-                          .addReg(right.getReg())
+                          .add(left)
+                          .add(right)
                           .getInstr();
 
   if (AltairXInstrInfo::isFCmp(*cmp)) {

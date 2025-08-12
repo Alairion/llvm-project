@@ -17,47 +17,23 @@
 namespace llvm::AltairX {
 
 // Natively supported condition codes for BRC
-enum class BRCondCode : std::uint32_t {
-  EQ = 0b000,  // Equal
-  NE = 0b001,  // Not equal
-  LT = 0b010,  // Less
-  GE = 0b011,  // Greater or equal
-  LTU = 0b100, // Less (unsigned)
-  GEU = 0b101, // Greater or equal (unsigned)
+enum class BRCondCode : uint32_t {
+  EQ = 0b000,  // Equal (signed or ordered)
+  NE = 0b001,  // Not equal (signed or ordered)
+  LT = 0b010,  // Less (signed or ordered)
+  GE = 0b011,  // Greater or equal (signed or ordered)
+  EQU = 0b100,  // Equal (unsigned or unordered)
+  NEU = 0b101,  // Not equal (unsigned or unordered)
+  LTU = 0b110,  // Less (unsigned or unordered)
+  GEU = 0b111,  // Greater or equal (unsigned or unordered)
 };
-
-struct ConditionOperands {
-  BRCondCode cc;
-  MachineOperand left;
-  MachineOperand right;
-};
-
-inline ConditionOperands
-reverseCondition(const ConditionOperands &operands) noexcept {
-  switch (operands.cc) {
-  case BRCondCode::EQ:
-    return {BRCondCode::NE, operands.left, operands.right};
-  case BRCondCode::NE:
-    return {BRCondCode::EQ, operands.left, operands.right};
-  case BRCondCode::LTU:
-    return {BRCondCode::LTU, operands.right, operands.left};
-  case BRCondCode::GEU:
-    return {BRCondCode::GEU, operands.right, operands.left};
-  case BRCondCode::LT:
-    return {BRCondCode::LT, operands.right, operands.left};
-  case BRCondCode::GE:
-    return {BRCondCode::GE, operands.right, operands.left};
-  default:
-    llvm_unreachable("Unknown codecode");
-  }
-}
 
 // Natively supported condition codes for SCMP and FSCMP
 enum class SCMPCondCode : uint32_t {
-  EQ,  // Equal
-  NE,  // Not Equal
-  LT,  // Less (signed)
-  LTU, // Less (unsigned), not supported by FSCMP
+  EQ = 0b00,  // Equal
+  NE = 0b01,  // Not Equal
+  LT = 0b10,  // Less (signed)
+  LTU = 0b11, // Less (unsigned), not supported by FSCMP
 };
 
 // in instruction descr TSFlags
