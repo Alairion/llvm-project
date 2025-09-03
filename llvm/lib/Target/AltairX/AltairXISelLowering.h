@@ -121,6 +121,7 @@ private:
   // Others
   SDValue LowerVASTART(SDValue Op, SelectionDAG& DAG) const;
   SDValue LowerVAARG(SDValue Op, SelectionDAG& DAG) const;
+  SDValue LowerVACOPY(SDValue Op, SelectionDAG& DAG) const;
 };
 } // namespace llvm
 

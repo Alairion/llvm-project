@@ -203,6 +203,8 @@ SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
     return LowerVASTART(Op, DAG);
   case ISD::VAARG:
     return LowerVAARG(Op, DAG);
+  case ISD::VACOPY:
+    return LowerVACOPY(Op, DAG);
   default:
     llvm_unreachable("unimplemented operand");
   }
@@ -1506,3 +1508,24 @@ SDValue AltairXTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
   return DAG.getLoad(type, dl, chain, vaarg, MachinePointerInfo{});
 }
 
+SDValue AltairXTargetLowering::LowerVACOPY(SDValue Op, SelectionDAG& DAG) const {
+  SDValue chain = Op.getOperand(0);
+  SDValue dst = Op.getOperand(1);
+  SDValue src = Op.getOperand(2);
+  const Value* dstSV = cast<SrcValueSDNode>(Op.getOperand(3))->getValue();
+  const Value* srcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
+  SDLoc dl{Op};
+
+  // struct va_list {
+  //   i32 gp_offset
+  //   i32 fp_offset
+  //   ptr overflow_area
+  //   ptr reg_save_area
+  // }
+  const uint64_t valistSize{24};
+  const uint64_t valistAlign{8};
+  return DAG.getMemcpy(chain, dl, dst, src,
+                       DAG.getIntPtrConstant(valistSize, dl),
+                       Align(valistAlign), false, false, nullptr, std::nullopt,
+                       MachinePointerInfo(dstSV), MachinePointerInfo(srcSV));
+}
