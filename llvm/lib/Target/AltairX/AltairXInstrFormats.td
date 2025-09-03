@@ -29,6 +29,7 @@ def InstFormatBRUAbsImm24 : InstFormat<12>;
 def InstFormatBRUIndirect : InstFormat<13>;
 def InstFormatCMPRegReg : InstFormat<14>; // cmp has a specific format
 def InstFormatCMPRegImm9 : InstFormat<15>;
+def InstFormatCUImplicit : InstFormat<16>;
 
 //===----------------------------------------------------------------------===//
 // Opcodes
@@ -196,6 +197,10 @@ class AltairXOpcodeCU<bits<4> val>
   let Value{1-4} = val;
   let Value{5-7} = 0b101;
 }
+
+def OPCODE_BRK     : AltairXOpcodeCU<0b1011>;
+def OPCODE_SYSCALL : AltairXOpcodeCU<0b0111>;
+def OPCODE_RETI    : AltairXOpcodeCU<0b1111>;
 
 def OPCODE_GETIR : AltairXOpcodeCU<0b0000>; // R <- IR
 def OPCODE_SETFR : AltairXOpcodeCU<0b1000>; // FR <- R
@@ -535,6 +540,11 @@ class AltairXInstEFUSetEF<AltairXOpcode opcode, dag outs, dag ins, list<dag> pat
 }
 
 // CU
+class AltairXInstCUImplicit<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr>
+  : AltairXInst<outs, ins, pattern, opcodestr, "", InstFormatCUImplicit> {
+  let Opcode = opcode.Value;
+}
+
 class AltairXInstCUSetFR<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern, string opcodestr, string argstr>
   : AltairXInst<outs, ins, pattern, opcodestr, argstr, InstFormatRegReg> {
   bits<6> rs1;

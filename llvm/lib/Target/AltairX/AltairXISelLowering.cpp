@@ -132,6 +132,11 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SRA_PARTS, AllIntsMVT, LegalizeAction::Expand);
   setOperationAction(ISD::SRL_PARTS, AllIntsMVT, LegalizeAction::Expand);
 
+  // DAGCombiner may replace some trunc + sext to sign extent inreg.
+  // This may generate sext_inreg with source type i1 that cannot be lowered as is.
+  // This is due to sext_inreg node value type being the destination not the input.
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, LegalizeAction::Expand);
+
   setOperationAction(ISD::FP_TO_SINT, SmallIntsMVT, LegalizeAction::Promote);
   setOperationAction(ISD::SINT_TO_FP, SmallIntsMVT, LegalizeAction::Promote);
   setOperationAction(ISD::FP_TO_UINT, SmallIntsMVT, LegalizeAction::Promote);
@@ -147,18 +152,47 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FCOS, AllFloatsMVT, LegalizeAction::Expand);
   setOperationAction(ISD::FPOW, AllFloatsMVT, LegalizeAction::Expand);
 
-  setOperationAction(ISD::DYNAMIC_STACKALLOC, AllIntsMVT, Expand);
-  setOperationAction({ISD::STACKSAVE, ISD::STACKRESTORE}, MVT::Other, Expand);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, AllIntsMVT, LegalizeAction::Expand);
+  setOperationAction({ISD::STACKSAVE, ISD::STACKRESTORE}, MVT::Other, LegalizeAction::Expand);
 
   setOperationAction(ISD::BR_CC, AllMVT, LegalizeAction::Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, LegalizeAction::Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, LegalizeAction::Expand);
   setOperationAction(ISD::BRIND, MVT::Other, LegalizeAction::Custom);
 
-  setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  setOperationAction(ISD::VAEND, MVT::Other, Expand);
-  setOperationAction(ISD::VAARG, MVT::Other, Custom);
-  setOperationAction(ISD::VACOPY, MVT::Other, Expand);
+  setOperationAction(ISD::VASTART, MVT::Other, LegalizeAction::Custom);
+  setOperationAction(ISD::VAEND, MVT::Other, LegalizeAction::Expand);
+  setOperationAction(ISD::VAARG, MVT::Other, LegalizeAction::Custom);
+  setOperationAction(ISD::VACOPY, MVT::Other, LegalizeAction::Custom);
+
+  setOperationAction(ISD::TRAP, MVT::Other, LegalizeAction::Legal);
+  setOperationAction(ISD::DEBUGTRAP, MVT::Other, LegalizeAction::Legal);
+
+  setOperationAction(ISD::ATOMIC_FENCE, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_STORE, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_CMP_SWAP, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_SWAP, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_ADD, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_SUB, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_AND, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_CLR, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_OR, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_XOR, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_NAND, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_MIN, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_MAX, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_UMIN, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_UMAX, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_FADD, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_FSUB, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_FMAX, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_FMIN, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_UINC_WRAP, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_UDEC_WRAP, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_USUB_COND, AllMVT, LegalizeAction::Expand);
+  setOperationAction(ISD::ATOMIC_LOAD_USUB_SAT, AllMVT, LegalizeAction::Expand);
 
   // Set minimum and preferred function alignment, and loop alignment
   setMinFunctionAlignment(Align{4});
