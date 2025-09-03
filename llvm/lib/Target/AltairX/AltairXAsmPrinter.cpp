@@ -65,6 +65,7 @@ private:
 // Simple pseudo-instructions have their lowering (with expansion to real
 // instructions) auto-generated.
 #include "AltairXGenMCPseudoLowering.inc"
+
 void AltairXAsmPrinter::EmitToStreamer(MCStreamer &S, const MCInst &Inst) {
   AsmPrinter::EmitToStreamer(*OutStreamer, Inst);
 }
@@ -129,23 +130,24 @@ MCOperand AltairXAsmPrinter::lowerOperand(const MachineOperand &MO) const {
     return MCOperand::createImm(MO.getImm());
   case MachineOperand::MO_MachineBasicBlock:
     return lowerSymbolOperand(MO, MO.getMBB()->getSymbol());
-  case MachineOperand::MO_GlobalAddress:
-    return lowerSymbolOperand(MO, getSymbol(MO.getGlobal()));
-  case MachineOperand::MO_BlockAddress:
-    return lowerSymbolOperand(MO, GetBlockAddressSymbol(MO.getBlockAddress()));
-  case MachineOperand::MO_ExternalSymbol:
-    return lowerSymbolOperand(MO, GetExternalSymbolSymbol(MO.getSymbolName()));
   case MachineOperand::MO_ConstantPoolIndex:
     return lowerSymbolOperand(MO, GetCPISymbol(MO.getIndex()));
   case MachineOperand::MO_JumpTableIndex:
     return lowerSymbolOperand(MO, GetJTISymbol(MO.getIndex()));
+  case MachineOperand::MO_ExternalSymbol:
+    return lowerSymbolOperand(MO, GetExternalSymbolSymbol(MO.getSymbolName()));
+  case MachineOperand::MO_GlobalAddress:
+    //OutStreamer->emitSymbolAttribute(getSymbol(MO.getGlobal()), MCSA_Global);
+    return lowerSymbolOperand(MO, getSymbol(MO.getGlobal()));
+  case MachineOperand::MO_BlockAddress:
+    return lowerSymbolOperand(MO, GetBlockAddressSymbol(MO.getBlockAddress()));
   case MachineOperand::MO_RegisterMask:
     break;
   default:
     llvm_unreachable("unknown operand type");
   }
 
-  return MCOperand();
+  return MCOperand{};
 }
 
 MCOperand AltairXAsmPrinter::lowerSymbolOperand(const MachineOperand &MO,

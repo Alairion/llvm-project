@@ -17,6 +17,9 @@ class AltairXELFObjectWriter : public MCELFObjectTargetWriter {
 public:
   AltairXELFObjectWriter(std::uint8_t OSABI);
 
+  bool needsRelocateWithSymbol(const MCValue &Val, const MCSymbol &Sym,
+                               unsigned Type) const override;
+
 protected:
   std::uint32_t getRelocType(MCContext &Ctx, const MCValue &Target,
                              const MCFixup &Fixup, bool IsPCRel) const override;

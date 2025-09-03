@@ -16,12 +16,14 @@
 #include "AltairXMCAsmInfo.h"
 #include "AltairXMCAsmBackend.h"
 #include "AltairXMCCodeEmitter.h"
+#include "AltairXELFStreamer.h"
 #include "AltairXMCTargetDesc.h"
 
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -57,6 +59,15 @@ createAltairXMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
 
   return createAltairXMCSubtargetInfoImpl(TT, CPU, CPU, FS);
 }
+
+static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
+                                    std::unique_ptr<MCAsmBackend> &&MAB,
+                                    std::unique_ptr<MCObjectWriter> &&OW,
+                                    std::unique_ptr<MCCodeEmitter> &&Emitter) {
+  return createAltairXELFStreamer(Context, std::move(MAB), std::move(OW),
+                                  std::move(Emitter));
+}
+
 
 static MCInstPrinter *createAltairXMCInstPrinter(const Triple &T,
                                                unsigned SyntaxVariant,
@@ -104,6 +115,8 @@ extern "C" void LLVMInitializeAltairXTargetMC() {
   // Register the MC subtarget info.
   TargetRegistry::RegisterMCSubtargetInfo(*target,
                                           createAltairXMCSubtargetInfo);
+  // Register the elf streamer.
+  TargetRegistry::RegisterELFStreamer(*target, createMCStreamer);
   // Register the MCInstPrinter.
   TargetRegistry::RegisterMCInstPrinter(*target, createAltairXMCInstPrinter);
   // Register the MCCodeEmitter

@@ -14,10 +14,18 @@
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCValue.h"
 
+#define DEBUG_TYPE "AltairXELFObjectWriter"
+
 namespace llvm {
 
 AltairXELFObjectWriter::AltairXELFObjectWriter(std::uint8_t OSABI)
     : MCELFObjectTargetWriter{true, OSABI, ELF::EM_AltairX, true} {}
+
+bool AltairXELFObjectWriter::needsRelocateWithSymbol(const MCValue &Val,
+                                                     const MCSymbol &Sym,
+                                                     unsigned Type) const {
+  return true;
+}
 
 std::uint32_t AltairXELFObjectWriter::getRelocType(MCContext &Ctx,
                                                    const MCValue &Target,
