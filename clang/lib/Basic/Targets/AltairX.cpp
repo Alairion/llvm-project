@@ -61,6 +61,34 @@ ArrayRef<TargetInfo::GCCRegAlias> AltairXTargetInfo::getGCCRegAliases() const {
   return {GCCRegAliases};
 }
 
+AltairXTargetInfo::AltairXTargetInfo(const llvm::Triple& Triple, const TargetOptions&)
+  : TargetInfo(Triple)
+{
+  // Description string has to be kept in sync with backend string at
+  // llvm/lib/Target/AltairX/AltairXTargetMachine.cpp
+  resetDataLayout(
+    "e" // Little endian
+    "-m:e" // ELF name mangling
+    "-p:64:64:64:64" // 64-bit pointers, 64-bit aligned
+    "-i64:64" // 64-bit integers, 64 bit aligned
+    "-n8:16:32:64" // 8, 16, 32 and 64 bits native integers
+    "-S64" // 64-bit natural stack alignment
+  );
+
+  SuitableAlign = 128; // Minimum valid align for any type
+
+  PointerWidth = 64;
+  PointerAlign = 64;
+  BoolWidth = 8;
+  BoolAlign = 8;
+  IntWidth = 32;
+  IntAlign = 32;
+  LongWidth = 64;
+  LongAlign = 64;
+  MaxAtomicPromoteWidth = 64;
+  MaxAtomicInlineWidth = 64;
+}
+
 void AltairXTargetInfo::getTargetDefines(const LangOptions &Opts,
                                        MacroBuilder &Builder) const {
   // Define the __ALTAIRX__ macro when building for this target
