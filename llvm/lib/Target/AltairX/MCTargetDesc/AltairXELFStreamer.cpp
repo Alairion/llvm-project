@@ -35,11 +35,15 @@ void AltairXELFStreamer::emitInstruction(const MCInst& MI,
   const MCSubtargetInfo& STI) {
   if (MI.getOpcode() == AltairX::BUNDLE) {
     for (uint32_t i = 0; i < MI.getNumOperands(); ++i) {
-      MCObjectStreamer::emitInstruction(*MI.getOperand(i).getInst(), STI);
+      // MCStream is responsible for registering symbols that need relocation.
+      // It does not understand bundles so we give bundle instructions one
+      // by one.
+      MCStreamer::emitInstruction(*MI.getOperand(i).getInst(), STI);
     }
-  } else {
-    MCObjectStreamer::emitInstruction(MI, STI);
   }
+
+  // Let the whole bundle be emited for real
+  MCObjectStreamer::emitInstruction(MI, STI);
 }
 
 void AltairXELFStreamer::EmitAltairXOptionRecords() {

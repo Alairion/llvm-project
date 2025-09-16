@@ -91,22 +91,22 @@ void AltairX::relocate(std::uint8_t *loc, const Relocation &rel,
   case R_ALTAIRX_NONE:
     break;
   case R_ALTAIRX_PCREL23LO:
-    writeBits(loc, 9, val, 0, 24);
+    writeBits(loc, 9, val / 4, 0, 23);
     break;
   case R_ALTAIRX_PCREL23HI:
-    writeBits(loc, 8, val, 23, 24);
+    writeBits(loc, 8, val / 4, 23, 24);
     break;
   case R_ALTAIRX_PCREL24LO:
-    writeBits(loc, 8, val, 0, 24);
+    writeBits(loc, 8, val / 4, 0, 24);
     break;
   case R_ALTAIRX_PCREL24HI:
-    writeBits(loc, 8, val, 24, 24);
+    writeBits(loc, 8, val / 4, 24, 24);
     break;
   case R_ALTAIRX_ABS24LO:
-    writeBits(loc, 8, val, 0, 24);
+    writeBits(loc, 8, val / 4, 0, 24);
     break;
   case R_ALTAIRX_ABS24HI:
-    writeBits(loc, 8, val, 24, 24);
+    writeBits(loc, 8, val / 4, 24, 24);
     break;
   case R_ALTAIRX_MOVEIX9LO:
     writeBits(loc, 11, val, 0, 9);

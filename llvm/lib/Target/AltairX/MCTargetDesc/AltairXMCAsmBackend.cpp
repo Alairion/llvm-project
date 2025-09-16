@@ -242,44 +242,4 @@ bool AltairXMCAsmBackend::mayNeedRelaxation(const MCInst &Inst,
   return false;
 }
 
-bool AltairXMCAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
-                                                const MCFixup &Fixup,
-                                                const MCValue &Target,
-                                                const uint64_t Value,
-                                                const MCSubtargetInfo *STI) {
-  if(Fixup.getKind() >= FirstLiteralRelocationKind)
-    return true;
-  const unsigned FixupKind = Fixup.getKind();
-  switch(FixupKind) {
-  default:
-    return false;
-  // All these relocations require special processing
-  // at linking time. Delegate this work to a linker.
-  case AltairX::fixup_altairx_pcrel23lo:
-    return true;
-  case AltairX::fixup_altairx_pcrel23hi:
-    return true;
-  case AltairX::fixup_altairx_pcrel24lo:
-    return true;
-  case AltairX::fixup_altairx_pcrel24hi:
-    return true;
-  case AltairX::fixup_altairx_abs24lo:
-    return true;
-  case AltairX::fixup_altairx_abs24hi:
-    return true;
-  case AltairX::fixup_altairx_moveix9lo:
-    return true;
-  case AltairX::fixup_altairx_moveix9hi:
-    return true;
-  case AltairX::fixup_altairx_moveix10lo:
-    return true;
-  case AltairX::fixup_altairx_moveix10hi:
-    return true;
-  case AltairX::fixup_altairx_moveix18lo:
-    return true;
-  case AltairX::fixup_altairx_moveix18hi:
-    return true;
-  }
-}
-
 } // namespace llvm
