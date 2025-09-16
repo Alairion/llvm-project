@@ -58,6 +58,7 @@
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/Sema.h"
+#include "clang/Sema/SemaAltairX.h"
 #include "clang/Sema/SemaAMDGPU.h"
 #include "clang/Sema/SemaARM.h"
 #include "clang/Sema/SemaBPF.h"
@@ -1916,6 +1917,9 @@ bool Sema::CheckTSBuiltinFunctionCall(const TargetInfo &TI, unsigned BuiltinID,
     // Some builtins don't require additional checking, so just consider these
     // acceptable.
     return false;
+  case llvm::Triple::altairx:
+    return AltairX().CheckAltairXBuiltinFunctionCall(TI, BuiltinID,
+                                                     TheCall);
   case llvm::Triple::arm:
   case llvm::Triple::armeb:
   case llvm::Triple::thumb:

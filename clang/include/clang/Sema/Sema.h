@@ -154,6 +154,7 @@ enum class OverloadCandidateParamOrder : char;
 enum OverloadCandidateRewriteKind : unsigned;
 class OverloadCandidateSet;
 class Preprocessor;
+class SemaAltairX;
 class SemaAMDGPU;
 class SemaARM;
 class SemaAVR;
@@ -1044,6 +1045,11 @@ public:
   /// CurContext - This is the current declaration context of parsing.
   DeclContext *CurContext;
 
+  SemaAltairX &AltairX() {
+    assert(AltairXPtr);
+    return *AltairXPtr;
+  }
+
   SemaAMDGPU &AMDGPU() {
     assert(AMDGPUPtr);
     return *AMDGPUPtr;
@@ -1206,6 +1212,7 @@ private:
 
   mutable IdentifierInfo *Ident_super;
 
+  std::unique_ptr<SemaAltairX> AltairXPtr;
   std::unique_ptr<SemaAMDGPU> AMDGPUPtr;
   std::unique_ptr<SemaARM> ARMPtr;
   std::unique_ptr<SemaAVR> AVRPtr;

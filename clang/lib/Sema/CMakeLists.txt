@@ -28,6 +28,7 @@ add_clang_library(clangSema
   Scope.cpp
   ScopeInfo.cpp
   Sema.cpp
+  SemaAltairX.cpp
   SemaAMDGPU.cpp
   SemaARM.cpp
   SemaAVR.cpp

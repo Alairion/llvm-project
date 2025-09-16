@@ -184,6 +184,16 @@ namespace clang {
   };
   } // namespace LoongArch
 
+  /// AltairX builtins
+  namespace AltairX {
+  enum {
+    LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
+#define BUILTIN(ID, TYPE, ATTRS) BI##ID,
+#include "clang/Basic/BuiltinsAltairX.def"
+    LastTSBuiltin
+  };
+  } // namespace AltairX
+
   /// Flags to identify the types for overloaded Neon builtins.
   ///
   /// These must be kept in sync with the flags in utils/TableGen/NeonEmitter.h.
