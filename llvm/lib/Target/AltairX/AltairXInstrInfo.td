@@ -155,7 +155,7 @@ def : Pat<(AltairXcall texternalsym:$func), (Call texternalsym:$func)>;
 def STD_AltairXjump : SDTypeProfile<0, 1, [SDTCisPtrTy<0>]>;
 def AltairXjump : SDNode<"AltairXISD::JUMP", STD_AltairXjump, [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
-let isCall = 1 in // not sure about that
+let isCall = 1, isTerminator = 1 in
 def Jump : AltairXInstAbsBRA<OPCODE_JUMP,
   (outs),
   (ins calltarget:$target),
@@ -170,6 +170,7 @@ def brtarget : Operand<OtherVT> {
   let OperandType = "OPERAND_PCREL";
 }
 
+let isTerminator = 1 in
 def BRA : AltairXInstRelBRA<OPCODE_BRA,
   (outs),
   (ins brtarget:$target),
@@ -182,7 +183,7 @@ def BRA : AltairXInstRelBRA<OPCODE_BRA,
 
 // Real instructions:
 // Indirect call, store link address to first operand, and jump to second operand
-let isCall = 1 in
+let isCall = 1, isTerminator = 1 in
 def IndirectCallLink : AltairXInstIndirectBRA<OPCODE_INDIRECT_CALL,
   (outs GPIReg64:$link),
   (ins GPIReg64:$target),
@@ -190,7 +191,7 @@ def IndirectCallLink : AltairXInstIndirectBRA<OPCODE_INDIRECT_CALL,
   "call", "$link, $target">;
 
 // Indirect callr, store link address to first operand, and add second operand to PC
-let isCall = 1 in
+let isCall = 1, isTerminator = 1 in
 def IndirectCallRelLink : AltairXInstIndirectBRA<OPCODE_INDIRECT_CALL,
   (outs GPIReg64:$link),
   (ins GPIReg64:$target),

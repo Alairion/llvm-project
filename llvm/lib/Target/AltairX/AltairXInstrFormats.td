@@ -446,7 +446,6 @@ class AltairXInstBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> pattern,
   
   let isBranch = 1;
   let isBarrier = 1;
-  let isTerminator = 1;
 }
 
 // BRU unconditional relative branches (callr, bra)
@@ -471,7 +470,6 @@ class AltairXInstIndirectBRA<AltairXOpcode opcode, dag outs, dag ins, list<dag> 
   let isBranch = 1;
   let isBarrier = 1;
   let isIndirectBranch = 1;
-  let isTerminator = 1;
 }
 
 // FPU
