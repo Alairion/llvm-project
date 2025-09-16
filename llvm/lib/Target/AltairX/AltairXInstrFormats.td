@@ -50,6 +50,7 @@ class AltairXOpcodeALU0<bits<4> val>
   let Value{5-7} = 0b000;
 }
 
+def OPCODE_NOP : AltairXOpcodeALU0<0b0000>;
 def OPCODE_MOVEIX : AltairXOpcodeALU0<0b0000>;
 def OPCODE_MOVEI : AltairXOpcodeALU0<0b1000>;
 def OPCODE_EXT : AltairXOpcodeALU0<0b0110>;

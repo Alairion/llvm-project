@@ -31,9 +31,11 @@ void initializeAltairXDAGToDAGISelLegacyPass(PassRegistry&);
 // AltairX passes
 FunctionPass* createAltairXBranchPatcherPass();
 FunctionPass* createAltairXMoveIXFillerPass();
+FunctionPass* createAltairXSlotValidatorPass();
 
 void initializeAltairXBranchPatcherPass(PassRegistry&);
 void initializeAltairXMoveIXFillerPass(PassRegistry&);
+void initializeAltairXSlotValidatorPass(PassRegistry&);
 
 } // namespace llvm
 

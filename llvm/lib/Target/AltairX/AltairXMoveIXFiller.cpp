@@ -1,13 +1,8 @@
-//===-- AltairXMoveIXFiller.cxx - AltairX Register Information Impl - C++--===//
+//===-- AltairXMoveIXFiller.cxx -- C++ ------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//===----------------------------------------------------------------------===//
-//
-// This file contains the AltairX implementation of the TargetRegisterInfo
-// class.
 //
 //===----------------------------------------------------------------------===//
 
@@ -31,7 +26,7 @@ INITIALIZE_PASS(
     "Add 'moveix' instruction next to instructions requiring bigger immediates",
     false, false)
 
-FunctionPass *llvm::createAltairXMoveIXFillerPass() {
+FunctionPass *createAltairXMoveIXFillerPass() {
   return new AltairXMoveIXFiller();
 }
 

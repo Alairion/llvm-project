@@ -44,6 +44,7 @@ enum NodeType {
   ITOF,
   FTOI,
   VAARG,
+  SYSCALL,
 };
 }
 
@@ -95,6 +96,9 @@ private:
 
   MachineBasicBlock *EmitVAARGWithCustomInserter(MachineInstr &MI,
                                                  MachineBasicBlock *MBB) const;
+
+  // Intrinsics
+  SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, SelectionDAG& DAG) const;
 
   // Float handling:
   SDValue LowerFP_TO_SINT(SDValue Op, SelectionDAG& DAG) const;

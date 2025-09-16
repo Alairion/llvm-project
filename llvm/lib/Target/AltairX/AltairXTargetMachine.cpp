@@ -29,6 +29,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAltairXTarget() {
   initializeAltairXDAGToDAGISelLegacyPass(PR);
   initializeAltairXBranchPatcherPass(PR);
   initializeAltairXMoveIXFillerPass(PR);
+  initializeAltairXSlotValidatorPass(PR);
 }
 
 namespace
@@ -131,6 +132,7 @@ bool AltairXPassConfig::addInstSelector() {
 void AltairXPassConfig::addPreEmitPass() {
   addPass(createAltairXBranchPatcherPass());
   addPass(createAltairXMoveIXFillerPass());
+  addPass(createAltairXSlotValidatorPass());
 }
 
 void AltairXPassConfig::addPreEmitPass2() {}

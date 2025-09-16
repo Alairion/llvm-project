@@ -84,6 +84,9 @@ def AltairXGlobalAddrValue : AltairXPseudo<
   "move $ptr, $addr"
 >;
 
+// No-op instruction for late code generation
+def NOP : AltairXInst<(outs), (ins), [], "nop", "", InstFormatPseudo>;
+
 def : Pat<(AltairXGAWRAPPER tjumptable:$addr),
   (AltairXGlobalAddrValue tjumptable:$addr)>;
 def : Pat<(AltairXGAWRAPPER tconstpool:$addr),
@@ -117,6 +120,11 @@ let Defs = [R0], Uses = [R0], hasSideEffects = 1 in {
 //===----------------------------------------------------------------------===//
 // Syscalls
 //===----------------------------------------------------------------------===//
+def STD_AltairXsyscall : SDTypeProfile<0, -1, []>;
+def AltairXsyscall : SDNode<"AltairXISD::SYSCALL", STD_AltairXsyscall, [SDNPHasChain, SDNPSideEffect, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+
+let hasSideEffects = 1 in
+def SYSCALL : AltairXInstCUImplicit<OPCODE_SYSCALL, (outs), (ins), [(AltairXsyscall)], "syscall">;
 
 def BRK : AltairXInstCUImplicit<OPCODE_BRK, (outs), (ins), [], "brk">;
 def : Pat<(trap), (BRK)>;

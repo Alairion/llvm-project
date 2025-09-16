@@ -22,6 +22,7 @@ add_llvm_target(AltairXCodeGen
   AltairXInstrInfo.cpp
   AltairXISelLowering.cpp
   AltairXMoveIXFiller.cpp
+  AltairXSlotValidator.cpp
   AltairXRegisterInfo.cpp
   AltairXSubtarget.cpp
   AltairXTargetObjectFile.cpp

@@ -28,6 +28,8 @@
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/IntrinsicsAltairX.h"
 #include "llvm/Support/Debug.h"
 
 #include <cassert>
@@ -97,6 +99,8 @@ AltairXTargetLowering::AltairXTargetLowering(const TargetMachine &TM,
   //setOperationAction(FRAMEADDR, MVT::i64, LegalizeAction::Custom);
   //setOperationAction(RETURNADDR, MVT::i64, LegalizeAction::Custom);
   //setOperationAction(ADDROFRETURNADDR, MVT::i64, LegalizeAction::Custom);
+
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, LegalizeAction::Custom);
 
   // AXIMPR: This can be matched, but they are hard to generate from high level code
   setOperationAction(ISD::SMUL_LOHI, AllIntsMVT, LegalizeAction::Expand);
@@ -207,6 +211,8 @@ SDValue AltairXTargetLowering::LowerOperation(SDValue Op,
   LLVM_DEBUG(Op.dump());
 
   switch (Op.getOpcode()) {
+  case ISD::INTRINSIC_W_CHAIN:
+    return LowerINTRINSIC_W_CHAIN(Op, DAG);
   case ISD::FP_TO_SINT:
     return LowerFP_TO_SINT(Op, DAG);
   case ISD::FP_TO_UINT:
@@ -284,8 +290,10 @@ const char *AltairXTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "AltairXISD::FTOI";
   case AltairXISD::VAARG:
     return "AltairXISD::VAARG";
+  case AltairXISD::SYSCALL:
+    return "AltairXISD::SYSCALL";
   default:
-    return nullptr;
+    return nullptr; // llvm will print the Opcode value
   }
 }
 
@@ -311,6 +319,32 @@ AltairXTargetLowering::getRegForInlineAsmConstraint(
 }
 
 namespace {
+
+// Convert to target constant so this instruction won't be selected by
+// the tablegen pattern (set regclass:$rd, immpat:$imm)
+// In some cases the left operand must be a constant value. But this is not
+// natively supported. Example: "a > 5" becomes "5 < a".
+// This is a simple helper fonction that returns a new node to materialize
+// the constant.
+SDValue promoteConstant(SelectionDAG &DAG, SDLoc dl, SDValue node) {
+  if (node.getOpcode() == ISD::Constant || node.getOpcode() == ISD::TargetConstant) {
+    const auto type = node.getValueType();
+
+    if (auto *iconstant = dyn_cast<ConstantSDNode>(node); iconstant) {
+      auto val = DAG.getTargetConstant(iconstant->getAPIntValue(), dl, type);
+      return DAG.getNode(AltairXISD::CONSTANTTOREG, dl, type, val);
+      // AXIMRP: Support immediate/constant floats, using fmove etc
+      //} else if (auto *fconstant = dyn_cast<ConstantFPSDNode>(node);
+      //fconstant) {
+      //  auto val = DAG.getTargetConstantFP(fconstant->getValueAPF(), dl,
+      //  type); return DAG.getNode(AltairXISD::CONSTANTTOREG, dl, type, val);
+    } else {
+      llvm_unreachable("Expected constant SDNode");
+    }
+  }
+
+  return node;
+}
 
 SDValue toValVT(SelectionDAG &DAG, SDValue Value, const CCValAssign &VA,
                 const SDLoc &DL) {
@@ -919,6 +953,74 @@ MachineBasicBlock *AltairXTargetLowering::EmitVAARGWithCustomInserter(
   return endMBB;
 }
 
+namespace
+{
+
+SDValue lowerSYSCALL(SDValue Op, SelectionDAG &DAG,
+                     const TargetRegisterInfo *regInfo) {
+  SDLoc dl{Op};
+  SDValue chain = Op.getOperand(0);
+
+  // Build a sequence of copy-to-reg nodes chained together with token
+  // chain and flag operands which copy the outgoing args into registers.
+  // The Glue in necessary since all emitted instructions must be
+  // stuck together.
+  // This is really close to a call but shortened: no mem ops,
+  // predefined return type...
+
+  SmallVector<SDValue, 11> ops;
+  SDValue glue;
+  for (uint32_t i = 2; i < Op.getNumOperands(); ++i) {
+    const Register reg = GPRArgRegs[i - 2];
+    SDValue operand = promoteConstant(DAG, dl, Op.getOperand(i));
+    chain = DAG.getCopyToReg(chain, dl, reg, operand, glue);
+    glue = chain.getValue(1);
+    ops.emplace_back(DAG.getRegister(GPRArgRegs[i - 2], MVT::i64));
+  }
+
+  // Operands order is important: chain -> registers -> mask -> glue
+  ops.insert(ops.begin(), chain);
+  const uint32_t *mask =
+      regInfo->getCallPreservedMask(DAG.getMachineFunction(), CallingConv::C);
+  assert(mask && "Missing call preserved mask for calling convention");
+  ops.emplace_back(DAG.getRegisterMask(mask));
+  ops.emplace_back(glue);
+
+  SDValue syscall = DAG.getNode(AltairXISD::SYSCALL, dl,
+                                DAG.getVTList(MVT::Other, MVT::Glue), ops);
+  chain = syscall.getValue(0);
+  glue = chain.getValue(1);
+
+  return DAG.getCopyFromReg(chain, dl, GPRArgRegs[0], MVT::i64, glue);
+}
+
+}
+
+SDValue AltairXTargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
+                                                      SelectionDAG &DAG) const {
+  switch(Op.getConstantOperandVal(1)) {
+  case Intrinsic::altairx_syscall0:
+    [[fallthrough]];
+  case Intrinsic::altairx_syscall1:
+    [[fallthrough]];
+  case Intrinsic::altairx_syscall2:
+    [[fallthrough]];
+  case Intrinsic::altairx_syscall3:
+    [[fallthrough]];
+  case Intrinsic::altairx_syscall4:
+    [[fallthrough]];
+  case Intrinsic::altairx_syscall5:
+    [[fallthrough]];
+  case Intrinsic::altairx_syscall6:
+    [[fallthrough]];
+  case Intrinsic::altairx_syscall7:
+    return lowerSYSCALL(Op, DAG, Subtarget.getRegisterInfo());
+  default:
+    LLVM_DEBUG(Op.dump());
+    llvm_unreachable("Unknown instrinsics");
+  }
+}
+
 SDValue AltairXTargetLowering::LowerFP_TO_SINT(SDValue Op,
                                                SelectionDAG &DAG) const {
   assert(Op.getSimpleValueType() == MVT::i64);
@@ -1028,33 +1130,7 @@ SDValue AltairXTargetLowering::LowerJumpTable(SDValue Op,
   return getGlobalAddressWrapper(DAG, cast<JumpTableSDNode>(Op));
 }
 
-namespace {
-
-// Convert to target constant so this instruction won't be selected by
-// the tablegen pattern (set regclass:$rd, immpat:$imm)
-// In some cases the left operand must be a constant value. But this is not
-// natively supported. Example: "a > 5" becomes "5 < a".
-// This is a simple helper fonction that returns a new node to materialize
-// the constant.
-SDValue promoteConstant(SelectionDAG &DAG, SDLoc dl, SDValue node) {
-  if (node.getOpcode() == ISD::Constant) {
-    const auto type = node.getValueType();
-
-    if (auto *iconstant = dyn_cast<ConstantSDNode>(node); iconstant) {
-      auto val = DAG.getTargetConstant(iconstant->getAPIntValue(), dl, type);
-      return DAG.getNode(AltairXISD::CONSTANTTOREG, dl, type, val);
-      // AXIMRP: Support immediate/constant floats, using fmove etc
-      //} else if (auto *fconstant = dyn_cast<ConstantFPSDNode>(node);
-      //fconstant) {
-      //  auto val = DAG.getTargetConstantFP(fconstant->getValueAPF(), dl,
-      //  type); return DAG.getNode(AltairXISD::CONSTANTTOREG, dl, type, val);
-    } else {
-      llvm_unreachable("Expected constant SDNode");
-    }
-  }
-
-  return node;
-}
+namespace{
 
 struct SBitOperands {
   SDValue left;
