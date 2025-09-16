@@ -12,6 +12,7 @@
 
 #include "AltairX.h"
 #include "clang/Basic/MacroBuilder.h"
+#include "clang/Basic/TargetBuiltins.h"
 #include "llvm/ADT/StringSwitch.h"
 
 using namespace clang;
@@ -93,6 +94,18 @@ void AltairXTargetInfo::getTargetDefines(const LangOptions &Opts,
                                        MacroBuilder &Builder) const {
   // Define the __ALTAIRX__ macro when building for this target
   Builder.defineMacro("__ALTAIRX__");
+}
+
+static constexpr Builtin::Info BuiltinInfo[] = {
+#define BUILTIN(ID, TYPE, ATTRS)                                               \
+  {#ID, TYPE, ATTRS, nullptr, HeaderDesc::NO_HEADER, ALL_LANGUAGES},
+#define TARGET_BUILTIN(ID, TYPE, ATTRS, FEATURE)                               \
+  {#ID, TYPE, ATTRS, FEATURE, HeaderDesc::NO_HEADER, ALL_LANGUAGES},
+#include "clang/Basic/BuiltinsAltairX.def"
+};
+
+ArrayRef<Builtin::Info> AltairXTargetInfo::getTargetBuiltins() const {
+  return BuiltinInfo;
 }
 
 bool AltairXTargetInfo::validateAsmConstraint(
