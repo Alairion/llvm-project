@@ -8,6 +8,13 @@
 
 let TargetPrefix = "altairx" in {
 
-def int_altairx_syscall : Intrinsic<[], [llvm_vararg_ty], []>;
+class AltairXInt<list<LLVMType> ret_types, list<LLVMType> param_types,
+              list<IntrinsicProperty> intr_properties = []>
+    : Intrinsic<ret_types, param_types, intr_properties>,
+      ClangBuiltin<!subst("int_altairx", "__builtin_altairx", NAME)>;
+
+foreach i = 0...7 in {
+  def int_altairx_syscall#i : AltairXInt<[llvm_i64_ty], !listsplat(llvm_i64_ty, !add(i, 1)), [ImmArg<ArgIndex<0>>]>;
+}
 
 }
