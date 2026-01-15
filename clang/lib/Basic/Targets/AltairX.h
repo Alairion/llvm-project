@@ -32,7 +32,7 @@ public:
   ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
 
   BuiltinVaListKind getBuiltinVaListKind() const override {
-    return TargetInfo::VoidPtrBuiltinVaList;
+    return TargetInfo::X86_64ABIBuiltinVaList;
   }
 
   ArrayRef<Builtin::Info> getTargetBuiltins() const override;

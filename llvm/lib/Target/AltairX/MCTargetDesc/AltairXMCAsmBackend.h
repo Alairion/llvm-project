@@ -43,14 +43,25 @@ enum Fixups {
   // With for exemple, sign-extended N-bits long imm will be handled like this:
   //   tmp = sext iN imm to i64
   //   tmp[N - 1; N + 22] ^= imm24 from moveix
-  // Example: "add a, b, 0xF00FF0FF; moveix" (imm is -267390721)
+  // ---
+  // Example 1: "add a, b, 0xF00FF0FF; moveix" (imm is -267390721)
   // add will carry a 9bits imm, with the sign (bit 31) + 8 bits:
-  // 0xF00FF0FF -> 0x1FF
+  //   0xF00FF0FF -> 0x1FF
   // moveix will carry the remaining 24-bits, inverted:
-  // 0xF00FF0FF -> ~(0xF00FF0FF >> 8) -> 0x0FF00F
+  //   ~(0xF00FF0FF >> 8) -> 0x0F'F00F
   // At runtime the processor will do the following:
   //   tmp = sext i9 (0x1FF) to i64 = 0xFFFF'FFFF'FFFF'FFFF
-  //   tmp[8; 30] ^= 0x0FF00F -> FFFF'FFFF'F00F'F0FF
+  //   tmp[8; 30] ^= 0x0F'F00F -> FFFF'FFFF'F00F'F0FF
+  // ---
+  // Example 2: "add a, b, 0x000FF0FF; moveix" (imm is 1044735)
+  // add will carry a 9bits imm, with the sign (bit 31) + 8 bits:
+  //   0x000FF0FF -> 0x0FF
+  // moveix will carry the remaining 24-bits:
+  //   0x000FF0FF >> 8 -> 0xFF
+  // At runtime the processor will do the following:
+  //   tmp = sext i9 (0x0FF) to i64 = 0x0000'0000'0000'00FF
+  //   tmp[8; 30] ^= 0x00'00FF -> 0000'0000'0000'FFFF
+  // ---
   fixup_altairx_moveix9lo, // most ALU/MDU instructions
   fixup_altairx_moveix9hi,
   fixup_altairx_moveix10lo, // LSU instructions

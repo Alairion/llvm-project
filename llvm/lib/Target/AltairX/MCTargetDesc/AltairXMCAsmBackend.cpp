@@ -122,6 +122,8 @@ constexpr uint64_t getMoveIXLowSignedValue(uint64_t value) noexcept {
 template <uint32_t N, uint64_t Align = 1>
 uint64_t getMoveIXHighSignedValue(uint64_t value) noexcept {
   constexpr uint32_t size = N + 24;
+  const bool isNegative = static_cast<int64_t>(value) < 0;
+
   if (!isInt<size>(static_cast<int64_t>(value))) {
     llvm_unreachable("fixup value out of range");
   }
@@ -130,8 +132,15 @@ uint64_t getMoveIXHighSignedValue(uint64_t value) noexcept {
   }
 
   value /= Align; // align value
-  // put inversed bits [N - 1; N + 22] in moveix
-  return (value >> (N - 1)) ^ 0x00FFFFFFull;
+  value >>= (N - 1); // remove part from base instruction
+
+  // put inversed bits [N - 1; N + 22] in moveix when value is negative
+  if(isNegative)
+  {
+    return value ^ 0x00FFFFFFull;
+  }
+
+  return value;
 }
 
 template <uint32_t N, uint64_t Align = 1>

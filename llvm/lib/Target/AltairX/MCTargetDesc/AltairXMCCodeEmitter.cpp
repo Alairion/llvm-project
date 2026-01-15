@@ -106,7 +106,12 @@ void AltairXMCCodeEmitter::encodeInstruction(const MCInst &Inst,
 
     const MCInst *second = Inst.getOperand(1).getInst();
     assert(second);
+    const auto fixupCount = Fixups.size();
     const auto secondOpcode = getBinaryCodeForInstr(*second, Fixups, STI);
+    // Offset fixup of second slot instructions
+    if (fixupCount < Fixups.size()) {
+      Fixups.back().setOffset(4);
+    }
 
     support::endian::write<uint32_t>(CB, firstOpcode, llvm::endianness::little);
     support::endian::write<uint32_t>(CB, secondOpcode,

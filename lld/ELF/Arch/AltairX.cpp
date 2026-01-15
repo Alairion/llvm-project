@@ -82,7 +82,8 @@ void AltairX::writeBits(std::uint8_t *loc, std::uint32_t locOff, std::uint64_t v
   const auto sizeMask = ((1ull << size) - 1ull);
   const auto patch =
       static_cast<std::uint32_t>(((val >> valOff) & sizeMask) << locOff);
-  write32(ctx, loc, tmp | patch); // assume zeroed bits at mask location
+  const auto output = tmp | patch;
+  write32(ctx, loc, output); // assume zeroed bits at mask location
 }
 
 void AltairX::relocate(std::uint8_t *loc, const Relocation &rel,
@@ -90,6 +91,7 @@ void AltairX::relocate(std::uint8_t *loc, const Relocation &rel,
   switch (rel.type) {
   case R_ALTAIRX_NONE:
     break;
+  // BRU value is aligned on 4 bytes
   case R_ALTAIRX_PCREL23LO:
     writeBits(loc, 9, val / 4, 0, 23);
     break;
@@ -100,31 +102,32 @@ void AltairX::relocate(std::uint8_t *loc, const Relocation &rel,
     writeBits(loc, 8, val / 4, 0, 24);
     break;
   case R_ALTAIRX_PCREL24HI:
-    writeBits(loc, 8, val / 4, 24, 24);
+    writeBits(loc, 8, val / 4, 23, 24);
     break;
   case R_ALTAIRX_ABS24LO:
     writeBits(loc, 8, val / 4, 0, 24);
     break;
   case R_ALTAIRX_ABS24HI:
-    writeBits(loc, 8, val / 4, 24, 24);
+    writeBits(loc, 8, val / 4, 23, 24);
     break;
+  // For now, memory addresses are always moved to WRAM
   case R_ALTAIRX_MOVEIX9LO:
-    writeBits(loc, 11, val, 0, 9);
+    writeBits(loc, 11, val + 0x8000'0000ull, 0, 9);
     break;
   case R_ALTAIRX_MOVEIX9HI:
-    writeBits(loc, 8, val, 9, 24);
+    writeBits(loc, 8, val + 0x8000'0000ull, 8, 24);
     break;
   case R_ALTAIRX_MOVEIX10LO:
-    writeBits(loc, 10, val, 0, 10);
+    writeBits(loc, 10, val + 0x8000'0000ull, 0, 10);
     break;
   case R_ALTAIRX_MOVEIX10HI:
-    writeBits(loc, 8, val, 10, 24);
+    writeBits(loc, 8, val + 0x8000'0000ull, 9, 24);
     break;
   case R_ALTAIRX_MOVEIX18LO:
-    writeBits(loc, 8, val, 0, 18);
+    writeBits(loc, 8, val + 0x8000'0000ull, 0, 18);
     break;
   case R_ALTAIRX_MOVEIX18HI:
-    writeBits(loc, 8, val, 18, 24);
+    writeBits(loc, 8, val + 0x8000'0000ull, 17, 24);
     break;
   default:
     llvm_unreachable("unknown relocation");
