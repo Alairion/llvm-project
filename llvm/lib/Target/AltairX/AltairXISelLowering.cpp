@@ -806,7 +806,11 @@ MachineBasicBlock *AltairXTargetLowering::EmitVAARGWithCustomInserter(
   const MIMetadata metadata{MI};
 
   const Register destReg = MI.getOperand(0).getReg();
-  const MachineOperand& base = MI.getOperand(1);
+  MachineOperand& base = MI.getOperand(1); // base might be a reg or a stack frame
+  if(base.isReg() && base.isKill()) {
+      base.setIsKill(false); // AXIMPR: mark as kill the last uses
+  }
+
   const MachineOperand& offset = MI.getOperand(2);
   const uint64_t argSize = MI.getOperand(3).getImm();
   const uint64_t argMode = MI.getOperand(4).getImm();
@@ -824,11 +828,11 @@ MachineBasicBlock *AltairXTargetLowering::EmitVAARGWithCustomInserter(
       oldMMO, oldMMO->getFlags() & ~MachineMemOperand::MOLoad);
 
   constexpr int64_t slotSize = 8; // all args are in 8 bytes slots
-  constexpr uint64_t intRegsCount = 8;
-  constexpr uint64_t floatRegsCount = 8;
+  constexpr int64_t intRegsCount = 8;
+  constexpr int64_t floatRegsCount = 8;
   const bool useFPOffset = (argMode == 1);
-  const uint64_t maxOffset = intRegsCount * slotSize +
-                             (useFPOffset ? floatRegsCount * slotSize : 0);
+  const int64_t maxOffset = intRegsCount * slotSize +
+                            (useFPOffset ? floatRegsCount * slotSize : 0);
 
   // First emit code to check if gp_offset (or fp_offset) is below the bound.
   // If so, pull the argument from reg_save_area. (branch to offsetMBB)
