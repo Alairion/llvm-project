@@ -375,7 +375,7 @@ class AltairXInstMDUGetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pat
   let Inst{31-26} = rd;
   let Inst{25-20} = 0b111111; // zero
   let Inst{19-14} = 0b111111; // zero
-  let Inst{12-11} = pq{0-1};
+  let Inst{12-11} = pq{1-0};
   let Opcode = opcode.Value;
 }
 
@@ -387,7 +387,7 @@ class AltairXInstMDUSetMD<AltairXOpcode opcode, dag outs, dag ins, list<dag> pat
   let Inst{31-26} = 0b111111; // zero
   let Inst{25-20} = rs1;
   let Inst{19-14} = 0b111111; // zero
-  let Inst{12-11} = pq{0-1};
+  let Inst{12-11} = pq{1-0};
   let Opcode = opcode.Value;
 }
 
@@ -563,6 +563,6 @@ class AltairXInstCUGetIR<AltairXOpcode opcode, dag outs, dag ins, list<dag> patt
   let Inst{31-26} = rd;
   let Inst{25-20} = 0b111111; // zero
   let Inst{19-14} = 0b111111; // zero
-  let Inst{13-11} = ir{0-2};
+  let Inst{13-11} = ir{2-0};
   let Opcode = opcode.Value;
 }
